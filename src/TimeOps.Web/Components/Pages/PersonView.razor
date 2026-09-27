@@ -1,0 +1,148 @@
+@using System.Globalization
+@using TimeOps.Domain
+
+<div class="person-view">
+    <div class="person-overview">
+        <section class="person-gauge-panel" aria-label="Cobertura pessoal">
+            <div class="person-panel-heading">
+                <h3>Cobertura até @ReferenceDate.ToString("dd/MM/yyyy") <MetricInfo Title="Cobertura" Description="@CoverageHelp" /></h3>
+                <p>Horas registradas ÷ capacidade esperada</p>
+            </div>
+            <div class="gauge" role="img" aria-label="@GaugeAccessibleLabel">
+                <svg viewBox="0 0 300 180" aria-hidden="true" focusable="false">
+                    <path class="gauge-track" d="M 24 158 A 126 126 0 0 1 276 158" pathLength="100" />
+                    @if (Person.Coverage is not null)
+                    {
+                        <path class="gauge-fill @(Person.Coverage > 100 ? "over" : "")" d="M 24 158 A 126 126 0 0 1 276 158" pathLength="100" stroke-dasharray="@GaugeDash" />
+                    }
+                </svg>
+                <div class="gauge-value"><strong>@CoverageText</strong><span>de cobertura</span></div>
+            </div>
+            <p class="gauge-note">@CoverageNote</p>
+            <div class="gauge-totals">
+                <div><span>Completed <MetricInfo Title="Horas registradas" Description="@CompletedHelp" /></span><strong>@Hours(Person.Completed)</strong></div>
+                <div><span>Esperadas <MetricInfo Title="Horas esperadas" Description="@ExpectedHelp" /></span><strong>@Hours(Person.Expected)</strong></div>
+                <div><span>Diferença <MetricInfo Title="Diferença" Description="@DifferenceHelp" /></span><strong class="@VarianceClass(Person.Difference)">@SignedHours(Person.Difference)</strong></div>
+            </div>
+        </section>
+
+        <section class="person-work-panel" aria-label="Comparações de horas">
+            <div class="person-panel-heading">
+                <h3>Horas e capacidade</h3>
+                <p>Compare os valores atuais com o tempo disponível nesta sprint.</p>
+            </div>
+            <div class="person-comparison">
+                <div class="comparison-heading"><h4>Até a referência</h4><span>horas</span></div>
+                @if (Person.Completed is not null && Person.Expected is not null)
+                {
+                    <div class="comparison-row"><div class="comparison-label">Registradas <MetricInfo Title="Horas registradas" Description="@CompletedHelp" /><strong>@Hours(Person.Completed)</strong></div><div class="comparison-track"><span class="bar-completed" style="width: @BarWidth(Person.Completed.Value, Math.Max(Person.Completed.Value, Person.Expected.Value))"></span></div></div>
+                    <div class="comparison-row"><div class="comparison-label">Esperadas <MetricInfo Title="Horas esperadas" Description="@ExpectedHelp" /><strong>@Hours(Person.Expected)</strong></div><div class="comparison-track"><span class="bar-capacity" style="width: @BarWidth(Person.Expected.Value, Math.Max(Person.Completed.Value, Person.Expected.Value))"></span></div></div>
+                }
+                else
+                {
+                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade ou o campo Completed no Azure DevOps.</p>
+                }
+            </div>
+            <div class="person-comparison">
+                <div class="comparison-heading"><h4>Após a referência</h4><span>horas</span></div>
+                @if (Person.Remaining is not null && Person.FutureCapacity is not null)
+                {
+                    <div class="comparison-row"><div class="comparison-label">Trabalho restante <MetricInfo Title="Trabalho restante" Description="@RemainingHelp" /><strong>@Hours(Person.Remaining)</strong></div><div class="comparison-track"><span class="bar-remaining" style="width: @BarWidth(Person.Remaining.Value, Math.Max(Person.Remaining.Value, Person.FutureCapacity.Value))"></span></div></div>
+                    <div class="comparison-row"><div class="comparison-label">Capacidade futura <MetricInfo Title="Capacidade futura" Description="@FutureHelp" /><strong>@Hours(Person.FutureCapacity)</strong></div><div class="comparison-track"><span class="bar-capacity" style="width: @BarWidth(Person.FutureCapacity.Value, Math.Max(Person.Remaining.Value, Person.FutureCapacity.Value))"></span></div></div>
+                    <p class="comparison-balance">Saldo futuro: <strong class="@VarianceClass(Person.FutureBalance)">@SignedHours(Person.FutureBalance)</strong> <MetricInfo Title="Saldo futuro" Description="@FutureBalanceHelp" /></p>
+                }
+                else
+                {
+                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade futura ou o campo Remaining Work no Azure DevOps.</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <section class="person-detail-strip" aria-label="Outras métricas pessoais">
+        <div><span>Capacidade diária <MetricInfo Title="Capacidade diária" Description="@DailyHelp" /></span><strong>@Hours(Person.DailyCapacity)</strong><small>@(Person.DailyCapacity is null ? "Capacidade não cadastrada" : $"{DayLabel(Person.ElapsedDays)} até a referência")</small></div>
+        <div><span>Capacidade total <MetricInfo Title="Capacidade total" Description="@TotalHelp" /></span><strong>@Hours(Person.TotalCapacity)</strong><small>@(Person.DailyCapacity is null ? "Capacidade não cadastrada" : $"{DayLabel(Person.TotalDays)} de trabalho na sprint")</small></div>
+        <div><span>Estimativa original <MetricInfo Title="Estimativa original" Description="@OriginalHelp" /></span><strong>@Hours(Person.Original)</strong><small>Nas Tasks atribuídas agora</small></div>
+    </section>
+
+    @if (RelevantWarnings.Length > 0)
+    {
+        <details class="person-warnings">
+            <summary>@RelevantWarnings.Length @(RelevantWarnings.Length == 1 ? "aviso relevante" : "avisos relevantes") <span>Ver detalhes</span></summary>
+            <ul>@foreach (var warning in RelevantWarnings) { <li>@warning.Message</li> }</ul>
+        </details>
+    }
+
+    <section class="person-tasks" aria-label="Tasks da pessoa">
+        <div class="section-header"><div><h2>Tasks de @Person.Person!.Name</h2><p>Itens atualmente atribuídos a esta pessoa e usados nas somas.</p></div><span class="section-count">@Person.Tasks.Count @(Person.Tasks.Count == 1 ? "Task" : "Tasks") <MetricInfo Title="Tasks atribuídas" Description="@TasksHelp" /></span></div>
+        @if (Person.Tasks.Count > 0)
+        {
+            <div class="task-progress">
+                <div class="task-progress-heading"><span>Por categoria de estado <MetricInfo Title="Tasks por estado" Description="@StatesHelp" /></span><strong>@CompletedTaskCount / @Person.Tasks.Count concluídas</strong></div>
+                <div class="task-progress-track" role="img" aria-label="@TaskProgressAccessibleLabel">
+                    @foreach (var category in TaskCategories)
+                    {
+                        <span class="@StateClass(category.Key)" style="width: @TaskBarWidth(category.Value)" title="@CategoryLabel(category.Key): @category.Value"></span>
+                    }
+                </div>
+                <div class="task-progress-legend">
+                    @foreach (var category in TaskCategories)
+                    {
+                        <span><i class="@StateClass(category.Key)" aria-hidden="true"></i>@CategoryLabel(category.Key) <strong>@category.Value</strong></span>
+                    }
+                </div>
+            </div>
+        }
+        <details class="person-task-details">
+            <summary>Ver @Person.Tasks.Count @(Person.Tasks.Count == 1 ? "Task" : "Tasks") e horas registradas</summary>
+            <TaskList Tasks="Person.Tasks" />
+        </details>
+    </section>
+
+    <p class="method-note">Os valores de Completed, Remaining Work e Original Estimate refletem as Tasks atribuídas agora. A data escolhida altera a capacidade, mas não reconstrói apontamentos históricos. Estes indicadores não são uma avaliação automática de produtividade.</p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PersonMetrics Person { get; set; } = default!;
+    [Parameter, EditorRequired] public DateOnly ReferenceDate { get; set; }
+    [Parameter] public IReadOnlyList<DataWarning> GlobalWarnings { get; set; } = [];
+
+    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    private const string CoverageHelp = "Completed Work dividido pelas horas esperadas até a data escolhida, em porcentagem. Não se aplica quando a expectativa é zero; fica indisponível se faltar capacidade ou o campo Completed.";
+    private const string CompletedHelp = "Soma do Completed Work atual das Tasks atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
+    private const string ExpectedHelp = "Capacidade diária multiplicada pelos dias de trabalho decorridos na sprint, descontadas as folgas individuais e da equipe. Fica indisponível sem capacidade cadastrada.";
+    private const string DifferenceHelp = "Horas registradas menos horas esperadas. Negativo significa menos horas registradas do que a capacidade acumulada; positivo significa mais.";
+    private const string RemainingHelp = "Soma do Remaining Work atual das Tasks atribuídas a esta pessoa. Não é a diferença entre capacidade e Completed.";
+    private const string FutureHelp = "Capacidade dos dias de trabalho após a data escolhida até o fim da sprint, descontadas as folgas.";
+    private const string FutureBalanceHelp = "Capacidade futura menos Remaining Work. Um valor negativo indica que o trabalho restante excede a capacidade futura.";
+    private const string DailyHelp = "Soma da capacidade diária cadastrada nas atividades desta pessoa no Azure DevOps. Não presume oito horas quando faltar cadastro.";
+    private const string TotalHelp = "Capacidade diária multiplicada por todos os dias de trabalho da sprint, descontadas as folgas.";
+    private const string OriginalHelp = "Soma do Original Estimate atual das Tasks atribuídas a esta pessoa. É separada das horas registradas e restantes.";
+    private const string TasksHelp = "Tasks da sprint e do escopo da equipe atualmente atribuídas a esta pessoa. Cada Task é contada uma vez.";
+    private const string StatesHelp = "Distribuição por quantidade de Tasks conforme a categoria de estado atual no Azure DevOps. A proporção não representa horas.";
+
+    private int CompletedTaskCount => Person.Tasks.Count(task => string.Equals(task.StateCategory, "Completed", StringComparison.OrdinalIgnoreCase));
+    private DataWarning[] RelevantWarnings => Person.Warnings.Concat(GlobalWarnings.Where(warning => warning.Code.StartsWith("field.", StringComparison.Ordinal))).Distinct().ToArray();
+    private IEnumerable<KeyValuePair<string, int>> TaskCategories => Person.Tasks
+        .GroupBy(task => task.StateCategory, StringComparer.OrdinalIgnoreCase)
+        .Select(group => new KeyValuePair<string, int>(group.Key, group.Count()))
+        .OrderBy(group => StateOrder(group.Key));
+    private decimal GaugeFill => Math.Clamp(Person.Coverage ?? 0, 0, 100);
+    private string GaugeDash => $"{GaugeFill.ToString(CultureInfo.InvariantCulture)} 100";
+    private string CoverageText => Person.Coverage is not null ? $"{Person.Coverage.Value.ToString("N1", Pt)}%" : Person.Expected == 0 && Person.Completed is not null ? "N/A" : "—";
+    private string GaugeAccessibleLabel => Person.Coverage is not null ? $"Cobertura de {CoverageText}: {Hours(Person.Completed)} registradas para {Hours(Person.Expected)} esperadas." : $"Cobertura {CoverageNote}";
+    private string CoverageNote => Person.Coverage is not null
+        ? Person.Coverage > 100 ? "Acima de 100%: o arco para no limite, mas o percentual mostra o valor real." : "Capacidade acumulada até a data selecionada."
+        : Person.Expected == 0 && Person.Completed is not null ? "Não aplicável: não houve capacidade esperada até esta data." : "Indisponível: confira a capacidade ou o campo Completed.";
+    private string TaskProgressAccessibleLabel => $"{CompletedTaskCount} de {Person.Tasks.Count} Tasks concluídas. " + string.Join(", ", TaskCategories.Select(category => $"{CategoryLabel(category.Key)}: {category.Value}"));
+
+    private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
+    private static string DayLabel(int count) => $"{count} {(count == 1 ? "dia" : "dias")}";
+    private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
+    private static string VarianceClass(decimal? value) => value is null ? "" : value < 0 ? "negative" : value > 0 ? "positive" : "";
+    private static string BarWidth(decimal value, decimal maximum) => $"{(maximum > 0 ? Math.Clamp(value / maximum * 100, 0, 100) : 0).ToString(CultureInfo.InvariantCulture)}%";
+    private string TaskBarWidth(int count) => $"{((decimal)count / Person.Tasks.Count * 100).ToString(CultureInfo.InvariantCulture)}%";
+    private static int StateOrder(string category) => category switch { "Proposed" => 0, "InProgress" => 1, "Resolved" => 2, "Completed" => 3, "Removed" => 4, _ => 5 };
+    private static string StateClass(string category) => category switch { "Proposed" => "state-proposed", "InProgress" => "state-progress", "Resolved" => "state-resolved", "Completed" => "state-completed", "Removed" => "state-removed", _ => "state-other" };
+    private static string CategoryLabel(string category) => category switch { "Proposed" => "Propostas", "InProgress" => "Em andamento", "Resolved" => "Resolvidas", "Completed" => "Concluídas", "Removed" => "Removidas", _ => category };
+}

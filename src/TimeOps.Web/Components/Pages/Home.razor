@@ -110,6 +110,14 @@ else
         <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
     </div>
 
+    <nav class="view-switch" aria-label="Visualização do painel">
+        <button type="button" class="@(viewMode == DashboardView.Team ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Team)" @onclick="() => viewMode = DashboardView.Team">Equipe</button>
+        <button type="button" class="@(viewMode == DashboardView.Person ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Person)" @onclick="() => viewMode = DashboardView.Person">Pessoa</button>
+    </nav>
+
+    @if (viewMode == DashboardView.Team)
+    {
+
     <section class="summary" aria-label="Resumo da equipe">
         <div class="summary-primary"><p>Horas registradas <MetricInfo Title="Horas registradas" Description="@MetricHelp.Completed" /></p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
         <div class="summary-item"><p>Esperadas até a referência <MetricInfo Title="Horas esperadas" Description="@MetricHelp.Expected" /></p><strong>@Hours(dashboard.Team.Expected)</strong><span>@(dashboard.Team.Expected is null ? "Capacidade incompleta" : "Capacidade dos dias decorridos")</span></div>
@@ -205,6 +213,33 @@ else
     </section>
 
     <p class="method-note">Completed mostra o valor atual das Tasks atribuídas agora. A data escolhida altera a capacidade esperada, mas não reconstrói horas passadas. Estes dados não representam uma avaliação automática de produtividade.</p>
+    }
+    else
+    {
+        <section class="person-toolbar" aria-label="Selecionar pessoa">
+            <div><h2>Visão pessoal</h2><p>Escolha uma pessoa para conferir sua capacidade, horas e Tasks nesta sprint.</p></div>
+            @if (dashboard.People.Count > 0)
+            {
+                <div class="field person-picker">
+                    <label for="person">Integrante</label>
+                    <select id="person" value="@SelectedPerson?.Person?.Id" @onchange="OnPersonChanged">
+                        @foreach (var person in dashboard.People)
+                        {
+                            <option value="@person.Person!.Id">@person.Person.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+        </section>
+        @if (SelectedPerson is { } selectedPerson)
+        {
+            <PersonView Person="selectedPerson" ReferenceDate="dashboard.ReferenceDate" GlobalWarnings="dashboard.Warnings" />
+        }
+        else
+        {
+            <div class="person-empty">Nenhuma pessoa com capacidade ou Task nesta sprint.</div>
+        }
+    }
 }
 
 @code {
@@ -243,6 +278,13 @@ else
     private string errorTitle = "Não foi possível atualizar.";
     private bool busy;
     private bool stale;
+    private DashboardView viewMode = DashboardView.Team;
+    private string? selectedPersonId;
+    private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
+        ?? dashboard?.People.FirstOrDefault();
+    private enum DashboardView { Team, Person }
+
+    private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
 
     protected override async Task OnInitializedAsync()
     {
@@ -291,6 +333,8 @@ else
         dashboard = null;
         error = null;
         stale = false;
+        viewMode = DashboardView.Team;
+        selectedPersonId = null;
     }
 
     private async Task OnProjectChanged(ChangeEventArgs args)
@@ -369,7 +413,13 @@ else
         {
             var result = await Service.GetDashboardAsync(projectId, teamId, sprint, reference, force);
             if (result.IsFailure) { error = result.Error!.Message; stale = dashboard is not null; }
-            else { dashboard = result.Value; stale = false; }
+            else
+            {
+                dashboard = result.Value;
+                stale = false;
+                if (!dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
+                    selectedPersonId = dashboard.People.FirstOrDefault()?.Person?.Id;
+            }
         }
         catch (Exception) { error = "Ocorreu um erro inesperado. Tente atualizar novamente."; stale = dashboard is not null; }
         finally { busy = false; }
