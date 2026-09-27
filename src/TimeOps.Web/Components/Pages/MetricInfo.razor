@@ -1,0 +1,21 @@
+<span class="metric-info">
+    <button type="button" class="metric-info-trigger" popovertarget="@popoverId"
+            aria-label="Informações sobre @Title" style="@($"anchor-name: --{popoverId}")">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false">
+            <circle cx="10" cy="10" r="7.25" />
+            <path d="M10 9v4.25M10 6.5h.01" />
+        </svg>
+    </button>
+    <span id="@popoverId" class="metric-info-popover" popover="auto"
+          role="note" style="@($"position-anchor: --{popoverId}")">
+        <strong>@Title</strong>
+        <span>@Description</span>
+    </span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+
+    private readonly string popoverId = $"metric-info-{Guid.NewGuid():N}";
+}

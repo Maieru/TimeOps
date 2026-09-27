@@ -111,10 +111,10 @@ else
     </div>
 
     <section class="summary" aria-label="Resumo da equipe">
-        <div class="summary-primary"><p>Horas registradas</p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
-        <div class="summary-item"><p>Esperadas até a referência</p><strong>@Hours(dashboard.Team.Expected)</strong><span>Capacidade dos dias decorridos</span></div>
-        <div class="summary-item"><p>Diferença</p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@(dashboard.Team.Coverage is null ? "Cobertura não aplicável" : $"{dashboard.Team.Coverage.Value.ToString("N2", Pt)}% de cobertura")</span></div>
-        <div class="summary-item"><p>Trabalho restante</p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@Hours(dashboard.Team.FutureCapacity) de capacidade futura</span></div>
+        <div class="summary-primary"><p>Horas registradas <MetricInfo Title="Horas registradas" Description="@MetricHelp.Completed" /></p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
+        <div class="summary-item"><p>Esperadas até a referência <MetricInfo Title="Horas esperadas" Description="@MetricHelp.Expected" /></p><strong>@Hours(dashboard.Team.Expected)</strong><span>Capacidade dos dias decorridos</span></div>
+        <div class="summary-item"><p>Diferença <MetricInfo Title="Diferença" Description="@MetricHelp.Difference" /></p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@(dashboard.Team.Coverage is null ? "Cobertura não aplicável" : $"{dashboard.Team.Coverage.Value.ToString("N2", Pt)}% de cobertura") <MetricInfo Title="Cobertura" Description="@MetricHelp.Coverage" /></span></div>
+        <div class="summary-item"><p>Trabalho restante <MetricInfo Title="Trabalho restante" Description="@MetricHelp.Remaining" /></p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@Hours(dashboard.Team.FutureCapacity) de capacidade futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span></div>
     </section>
 
     @if (dashboard.Warnings.Count > 0)
@@ -123,10 +123,21 @@ else
     }
 
     <section class="data-section">
-        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p></div><span class="section-count">@dashboard.People.Count pessoa(s)</span></div>
+        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p></div><span class="section-count">@dashboard.People.Count pessoa(s) <MetricInfo Title="Pessoas da equipe" Description="@MetricHelp.PeopleCount" /></span></div>
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Pessoa</th><th>Completed</th><th>Esperado</th><th>Diferença</th><th>Cobertura</th><th>Estimativa</th><th>Restante</th><th>Cap. total</th><th>Cap. futura</th><th>Saldo futuro</th></tr></thead>
+                <thead><tr>
+                    <th>Pessoa <MetricInfo Title="Pessoa e Tasks" Description="@MetricHelp.PersonTasks" /></th>
+                    <th>Completed <MetricInfo Title="Completed por pessoa" Description="@MetricHelp.PersonCompleted" /></th>
+                    <th>Esperado <MetricInfo Title="Esperado por pessoa" Description="@MetricHelp.PersonExpected" /></th>
+                    <th>Diferença <MetricInfo Title="Diferença por pessoa" Description="@MetricHelp.Difference" /></th>
+                    <th>Cobertura <MetricInfo Title="Cobertura por pessoa" Description="@MetricHelp.Coverage" /></th>
+                    <th>Estimativa <MetricInfo Title="Estimativa original por pessoa" Description="@MetricHelp.PersonOriginal" /></th>
+                    <th>Restante <MetricInfo Title="Trabalho restante por pessoa" Description="@MetricHelp.PersonRemaining" /></th>
+                    <th>Cap. total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></th>
+                    <th>Cap. futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></th>
+                    <th>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></th>
+                </tr></thead>
                 <tbody>
                     @foreach (var person in dashboard.People)
                     {
@@ -149,14 +160,14 @@ else
     </section>
 
     <section class="secondary-stats" aria-label="Outras métricas">
-        <div><span>Capacidade total</span><strong>@Hours(dashboard.Team.TotalCapacity)</strong></div>
-        <div><span>Saldo futuro</span><strong class="@VarianceClass(dashboard.Team.FutureBalance)">@SignedHours(dashboard.Team.FutureBalance)</strong></div>
-        <div><span>Estimativa original</span><strong>@Hours(dashboard.Team.Original)</strong></div>
-        <div><span>Tasks concluídas</span><strong>@dashboard.Team.CompletedTaskCount / @dashboard.Team.TaskCount</strong><small>@Percent(dashboard.Team.TaskProgress)</small></div>
+        <div><span>Capacidade total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></span><strong>@Hours(dashboard.Team.TotalCapacity)</strong></div>
+        <div><span>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></span><strong class="@VarianceClass(dashboard.Team.FutureBalance)">@SignedHours(dashboard.Team.FutureBalance)</strong></div>
+        <div><span>Estimativa original <MetricInfo Title="Estimativa original" Description="@MetricHelp.Original" /></span><strong>@Hours(dashboard.Team.Original)</strong></div>
+        <div><span>Tasks concluídas <MetricInfo Title="Tasks concluídas" Description="@MetricHelp.CompletedTasks" /></span><strong>@dashboard.Team.CompletedTaskCount / @dashboard.Team.TaskCount</strong><small>@Percent(dashboard.Team.TaskProgress)</small></div>
     </section>
 
     <section class="state-counts" aria-label="Tasks por categoria de estado">
-        <span>Tasks por estado</span>
+        <span>Tasks por estado <MetricInfo Title="Tasks por estado" Description="@MetricHelp.StateCounts" /></span>
         @foreach (var category in dashboard.Team.StateCategories.OrderBy(item => item.Key))
         {
             <span class="state-count">@CategoryLabel(category.Key) <strong>@category.Value</strong></span>
@@ -169,6 +180,26 @@ else
 
 @code {
     private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    private static class MetricHelp
+    {
+        public const string Completed = "Soma do Completed Work das Tasks desta sprint e do escopo da equipe, inclusive concluídas e sem responsável. É o valor atual no DevOps, mesmo se a data de referência for anterior. Campos vazios entram como zero e geram aviso.";
+        public const string PersonCompleted = "Soma do Completed Work das Tasks atualmente atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
+        public const string PeopleCount = "Quantidade de pessoas com capacidade cadastrada ou com Tasks atribuídas nesta sprint. Tasks sem responsável aparecem em uma linha separada e não aumentam esta contagem.";
+        public const string PersonTasks = "Cada linha reúne a capacidade cadastrada da pessoa e as Tasks atualmente atribuídas a ela no escopo da sprint e da equipe. A contagem ao lado do nome mostra quantas Tasks compõem seus totais; abra a linha para ver os itens.";
+        public const string Expected = "Soma da capacidade diária cadastrada nas atividades de cada pessoa multiplicada pelos dias de trabalho da sprint até a data de referência, descontadas folgas individuais e da equipe. Um travessão indica capacidade ausente ou Tasks sem responsável, impedindo um total completo.";
+        public const string PersonExpected = "Capacidade diária desta pessoa multiplicada pelos dias de trabalho da sprint até a data de referência, descontadas as folgas. Um travessão indica que sua capacidade não está cadastrada.";
+        public const string Difference = "Horas registradas menos horas esperadas. Valor negativo indica menos horas registradas que a capacidade acumulada; positivo indica mais. Um travessão significa que algum dado necessário está indisponível.";
+        public const string Coverage = "Horas registradas divididas pelas horas esperadas, em porcentagem. Não se aplica quando a expectativa é zero ou está indisponível.";
+        public const string Remaining = "Soma do Remaining Work atual das Tasks desta sprint e do escopo da equipe, inclusive sem responsável e concluídas que ainda tenham valor restante. Não é a diferença entre horas esperadas e registradas. Campos vazios entram como zero e geram aviso.";
+        public const string PersonRemaining = "Soma do Remaining Work atual das Tasks atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
+        public const string TotalCapacity = "Capacidade diária multiplicada por todos os dias de trabalho da sprint, descontadas as folgas. O total da equipe fica indisponível se faltar capacidade de alguém ou houver Tasks sem responsável.";
+        public const string FutureCapacity = "Capacidade dos dias de trabalho após a data de referência até o fim da sprint, descontadas as folgas. No total da equipe, um travessão indica capacidade ausente ou Tasks sem responsável.";
+        public const string FutureBalance = "Capacidade futura menos Remaining Work. Valor negativo indica mais trabalho restante que capacidade futura. Um travessão indica capacidade futura ou Remaining Work indisponível.";
+        public const string Original = "Soma do Original Estimate das Tasks desta sprint e do escopo da equipe. É uma estimativa inicial, separada das horas registradas e restantes; campos vazios entram como zero e geram aviso.";
+        public const string PersonOriginal = "Soma do Original Estimate das Tasks atualmente atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
+        public const string CompletedTasks = "Quantidade de Tasks na categoria de estado Concluídas sobre todas as Tasks da sprint no escopo da equipe. A porcentagem é calculada por quantidade, não por horas.";
+        public const string StateCounts = "Quantidade atual de Tasks em cada categoria de estado do Azure DevOps. Cada Task é contada uma vez.";
+    }
     private IReadOnlyList<NamedItem> projects = [];
     private IReadOnlyList<NamedItem> teams = [];
     private IReadOnlyList<Sprint> sprints = [];
