@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TimeOps.Application/TimeOps.Application.csproj" />
+    <Project Path="src/TimeOps.Domain/TimeOps.Domain.csproj" />
+    <Project Path="src/TimeOps.Infrastructure/TimeOps.Infrastructure.csproj" />
+    <Project Path="src/TimeOps.Web/TimeOps.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TimeOps.Tests/TimeOps.Tests.csproj" />
+  </Folder>
+</Solution>

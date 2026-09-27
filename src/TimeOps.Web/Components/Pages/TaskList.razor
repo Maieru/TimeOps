@@ -1,0 +1,18 @@
+@using System.Globalization
+@using TimeOps.Domain
+
+<div class="task-list">
+    @if (Tasks.Count == 0) { <p>Nenhuma Task atribuída.</p> }
+    @foreach (var task in Tasks)
+    {
+        <div class="task-item">
+            <a href="@task.Url" target="_blank" rel="noopener noreferrer">#@task.Id · @task.Title <span aria-hidden="true">↗</span></a>
+            <span>@task.State · Completed @(Format(task.Completed)) · Restante @(Format(task.Remaining)) · Estimativa @(Format(task.Original))</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TaskWork> Tasks { get; set; } = [];
+    private static string Format(decimal? value) => value is null ? "—" : value.Value.ToString("N2", CultureInfo.GetCultureInfo("pt-BR")) + " h";
+}

@@ -1,0 +1,10 @@
+.header-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end}
+.connection-change{border:1px solid #cbd9dd;background:#fff;color:#315260;border-radius:8px;padding:9px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.connection-change:hover:not(:disabled){background:#eaf3f2}
+.connection-panel{display:grid;grid-template-columns:minmax(230px,1.3fr) minmax(170px,.8fr) minmax(190px,1fr) auto;gap:16px;align-items:end;background:#fff;border:1px solid #e2e8ec;border-radius:15px;padding:22px;box-shadow:0 8px 28px rgba(22,47,60,.035)}
+.connection-copy h2{font-size:18px;letter-spacing:-.02em;margin:0 0 5px}
+.connection-copy p{font-size:12px;color:#637682;line-height:1.45;margin:0;max-width:300px}
+.connect-button{height:42px;border:0;background:#137c77;color:#fff;border-radius:8px;padding:0 20px;font-size:13px;font-weight:700;cursor:pointer}
+.connect-button:hover:not(:disabled){background:#086763}
+@media(max-width:1120px){.connection-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.connection-copy{grid-column:1/-1}.connect-button{justify-self:start}}
+@media(max-width:610px){.connection-panel{grid-template-columns:1fr}.connection-copy{grid-column:auto}.connect-button{width:100%}.header-actions{justify-content:flex-start;margin-top:14px}}

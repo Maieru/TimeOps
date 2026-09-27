@@ -8,6 +8,7 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
 
 # Build results
+.dotnet-cli/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -508,6 +509,8 @@ x64/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
+
+.dotnet-cli
 
 *_i.c
 *_p.c

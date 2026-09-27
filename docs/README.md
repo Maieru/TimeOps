@@ -22,7 +22,7 @@ Esta entrega contém somente documentação. Os projetos, integrações e testes
 | Fonte de verdade | Azure DevOps Services, com integração somente de leitura |
 | Abrangência | Uma organização; seleção de projeto, equipe e sprint; uma equipe por consulta |
 | Público | Ferramenta destinada à equipe interna, com piloto usado localmente por uma pessoa |
-| Acesso inicial | Localhost e PAT no servidor, sem login próprio no piloto |
+| Acesso inicial | Localhost; organização e PAT informados no aplicativo, mantidos apenas em memória por sessão Blazor; sem login próprio no piloto |
 | Plataforma | C#, .NET 10 LTS e Blazor Web App interativo no servidor |
 | Arquitetura | Clean Architecture obrigatória, com quatro projetos e dependências verificadas |
 | Result pattern | Obrigatório em todas as camadas para representar sucesso e falhas esperadas das operações |

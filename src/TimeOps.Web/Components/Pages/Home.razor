@@ -1,0 +1,327 @@
+@page "/"
+@rendermode InteractiveServer
+@using System.Globalization
+@using TimeOps.Application
+@using TimeOps.Domain
+@inject DashboardService Service
+@inject ILogger<Home> Logger
+
+<PageTitle>Visão da sprint · TimeOps</PageTitle>
+
+<header class="page-header">
+    <div>
+        <h1>Visão da sprint</h1>
+        <p>Capacidade e horas registradas, diretamente do Azure DevOps.</p>
+    </div>
+    @if (Service.HasConnection)
+    {
+        <div class="header-actions">
+            @if (dashboard is not null)
+            {
+                <div class="collected"><span class="collected-dot"></span> Coletado em @Service.LocalTime(dashboard.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</div>
+            }
+            <button class="connection-change" type="button" @onclick="ChangeConnection" disabled="@busy">Trocar conexão</button>
+        </div>
+    }
+</header>
+
+@if (!Service.HasConnection)
+{
+    <form class="connection-panel" @onsubmit="ConnectAsync" @onsubmit:preventDefault autocomplete="off">
+        <div class="connection-copy">
+            <h2>Conectar ao Azure DevOps</h2>
+            <p>Informe a organização e um PAT com permissões de leitura. Os dados ficam somente nesta sessão local.</p>
+        </div>
+        <div class="field">
+            <label for="organization">Organização</label>
+            <input id="organization" type="text" @bind="organizationInput" @bind:event="oninput" placeholder="minha-organizacao" autocomplete="off" required />
+        </div>
+        <div class="field">
+            <label for="pat">Personal Access Token</label>
+            <input id="pat" type="password" @bind="patInput" @bind:event="oninput" autocomplete="off" required />
+        </div>
+        <button class="connect-button" type="submit" disabled="@busy">Conectar</button>
+    </form>
+}
+else
+{
+<section class="filters" aria-label="Selecionar contexto">
+    <div class="field">
+        <label for="project">Projeto</label>
+        <select id="project" value="@projectId" @onchange="OnProjectChanged" disabled="@busy">
+            <option value="">Selecione o projeto</option>
+            @foreach (var project in projects) { <option value="@project.Id">@project.Name</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="team">Equipe</label>
+        <select id="team" value="@teamId" @onchange="OnTeamChanged" disabled="@(busy || string.IsNullOrEmpty(projectId))">
+            <option value="">Selecione a equipe</option>
+            @foreach (var team in teams) { <option value="@team.Id">@team.Name</option> }
+        </select>
+    </div>
+    <div class="field">
+        <label for="sprint">Sprint</label>
+        <select id="sprint" value="@sprintId" @onchange="OnSprintChanged" disabled="@(busy || string.IsNullOrEmpty(teamId))">
+            <option value="">Selecione a sprint</option>
+            @foreach (var sprint in sprints) { <option value="@sprint.Id">@sprint.Name</option> }
+        </select>
+    </div>
+    <div class="field date-field">
+        <label for="reference">Capacidade até</label>
+        <input id="reference" type="date" value="@referenceText" max="@Service.Today.ToString("yyyy-MM-dd")" @onchange="OnReferenceChanged" disabled="@(busy || string.IsNullOrEmpty(sprintId))" />
+    </div>
+    <button class="refresh" type="button" @onclick="Refresh" disabled="@(busy || string.IsNullOrEmpty(sprintId))">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6M20 4v7h-7"/></svg>
+        Atualizar
+    </button>
+</section>
+}
+
+@if (busy)
+{
+    <div class="notice loading" role="status">Consultando o Azure DevOps…</div>
+}
+@if (error is not null)
+{
+    <div class="notice error" role="alert"><strong>@errorTitle</strong> @error</div>
+}
+@if (stale && dashboard is not null)
+{
+    <div class="notice warning" role="status">Os números abaixo são da última coleta completa, indicada no cabeçalho. Tente atualizar novamente.</div>
+}
+
+@if (dashboard is null)
+{
+    <section class="empty-state">
+        <div class="empty-symbol"><span></span><span></span><span></span></div>
+        <h2>Seu acompanhamento começa aqui</h2>
+        <p>@(Service.HasConnection ? "Escolha um projeto, uma equipe e uma sprint para comparar a capacidade esperada com as horas em Completed." : "Conecte-se para consultar projetos, equipes e sprints disponíveis.")</p>
+    </section>
+}
+else
+{
+    <div class="context-line">
+        <span>@dashboard.Sprint.Name</span>
+        @if (dashboard.Sprint.Start is not null && dashboard.Sprint.End is not null)
+        {
+            <span class="divider">/</span><span>@dashboard.Sprint.Start.Value.ToString("dd/MM") — @dashboard.Sprint.End.Value.ToString("dd/MM/yyyy")</span>
+        }
+        <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
+    </div>
+
+    <section class="summary" aria-label="Resumo da equipe">
+        <div class="summary-primary"><p>Horas registradas</p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
+        <div class="summary-item"><p>Esperadas até a referência</p><strong>@Hours(dashboard.Team.Expected)</strong><span>Capacidade dos dias decorridos</span></div>
+        <div class="summary-item"><p>Diferença</p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@(dashboard.Team.Coverage is null ? "Cobertura não aplicável" : $"{dashboard.Team.Coverage.Value.ToString("N2", Pt)}% de cobertura")</span></div>
+        <div class="summary-item"><p>Trabalho restante</p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@Hours(dashboard.Team.FutureCapacity) de capacidade futura</span></div>
+    </section>
+
+    @if (dashboard.Warnings.Count > 0)
+    {
+        <section class="notice warning" aria-label="Avisos de dados"><strong>@dashboard.Warnings.Count aviso(s) sobre os dados</strong><ul>@foreach (var warning in dashboard.Warnings) { <li>@warning.Message</li> }</ul></section>
+    }
+
+    <section class="data-section">
+        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p></div><span class="section-count">@dashboard.People.Count pessoa(s)</span></div>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Pessoa</th><th>Completed</th><th>Esperado</th><th>Diferença</th><th>Cobertura</th><th>Estimativa</th><th>Restante</th><th>Cap. total</th><th>Cap. futura</th><th>Saldo futuro</th></tr></thead>
+                <tbody>
+                    @foreach (var person in dashboard.People)
+                    {
+                        <tr>
+                            <th scope="row"><details><summary>@person.Person!.Name <small>@person.Tasks.Count Task(s)</small></summary><TaskList Tasks="person.Tasks" /></details></th>
+                            <td>@Hours(person.Completed)</td><td>@Hours(person.Expected)</td><td class="@VarianceClass(person.Difference)">@SignedHours(person.Difference)</td><td>@Percent(person.Coverage)</td><td>@Hours(person.Original)</td><td>@Hours(person.Remaining)</td><td>@Hours(person.TotalCapacity)</td><td>@Hours(person.FutureCapacity)</td><td class="@VarianceClass(person.FutureBalance)">@SignedHours(person.FutureBalance)</td>
+                        </tr>
+                    }
+                    @if (dashboard.Unassigned is not null)
+                    {
+                        <tr class="unassigned"><th scope="row"><details><summary>Sem responsável <small>@dashboard.Unassigned.Tasks.Count Task(s)</small></summary><TaskList Tasks="dashboard.Unassigned.Tasks" /></details></th><td>@Hours(dashboard.Unassigned.Completed)</td><td>—</td><td>—</td><td>—</td><td>@Hours(dashboard.Unassigned.Original)</td><td>@Hours(dashboard.Unassigned.Remaining)</td><td>—</td><td>—</td><td>—</td></tr>
+                    }
+                    @if (dashboard.People.Count == 0 && dashboard.Unassigned is null)
+                    {
+                        <tr><td colspan="10" class="no-data">Nenhuma pessoa com capacidade ou Task nesta sprint.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="secondary-stats" aria-label="Outras métricas">
+        <div><span>Capacidade total</span><strong>@Hours(dashboard.Team.TotalCapacity)</strong></div>
+        <div><span>Saldo futuro</span><strong class="@VarianceClass(dashboard.Team.FutureBalance)">@SignedHours(dashboard.Team.FutureBalance)</strong></div>
+        <div><span>Estimativa original</span><strong>@Hours(dashboard.Team.Original)</strong></div>
+        <div><span>Tasks concluídas</span><strong>@dashboard.Team.CompletedTaskCount / @dashboard.Team.TaskCount</strong><small>@Percent(dashboard.Team.TaskProgress)</small></div>
+    </section>
+
+    <section class="state-counts" aria-label="Tasks por categoria de estado">
+        <span>Tasks por estado</span>
+        @foreach (var category in dashboard.Team.StateCategories.OrderBy(item => item.Key))
+        {
+            <span class="state-count">@CategoryLabel(category.Key) <strong>@category.Value</strong></span>
+        }
+        @if (dashboard.Team.StateCategories.Count == 0) { <span>Sem Tasks nesta sprint</span> }
+    </section>
+
+    <p class="method-note">Completed mostra o valor atual das Tasks atribuídas agora. A data escolhida altera a capacidade esperada, mas não reconstrói horas passadas. Estes dados não representam uma avaliação automática de produtividade.</p>
+}
+
+@code {
+    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    private IReadOnlyList<NamedItem> projects = [];
+    private IReadOnlyList<NamedItem> teams = [];
+    private IReadOnlyList<Sprint> sprints = [];
+    private string projectId = "";
+    private string teamId = "";
+    private string sprintId = "";
+    private string referenceText = "";
+    private string organizationInput = "";
+    private string patInput = "";
+    private Dashboard? dashboard;
+    private string? error;
+    private string errorTitle = "Não foi possível atualizar.";
+    private bool busy;
+    private bool stale;
+
+    protected override async Task OnInitializedAsync()
+    {
+        referenceText = Service.Today.AddDays(-1).ToString("yyyy-MM-dd");
+        organizationInput = Service.Organization;
+        if (!Service.HasConnection) return;
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        busy = true;
+        try
+        {
+            var result = await Service.ListProjectsAsync();
+            if (result.IsFailure) error = result.Error!.Message;
+            else projects = result.Value;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Falha inesperada ao listar projetos");
+            error = "Ocorreu um erro inesperado. Recarregue a página.";
+        }
+        finally { busy = false; }
+    }
+
+    private async Task ConnectAsync()
+    {
+        var result = Service.ConfigureConnection(organizationInput, patInput);
+        patInput = "";
+        error = null;
+        errorTitle = "Não foi possível conectar.";
+        if (result.IsFailure) { error = result.Error!.Message; return; }
+        await LoadProjects();
+    }
+
+    private void ChangeConnection()
+    {
+        organizationInput = Service.Organization;
+        Service.Disconnect();
+        patInput = "";
+        projects = [];
+        teams = [];
+        sprints = [];
+        projectId = teamId = sprintId = "";
+        dashboard = null;
+        error = null;
+        stale = false;
+    }
+
+    private async Task OnProjectChanged(ChangeEventArgs args)
+    {
+        projectId = args.Value?.ToString() ?? "";
+        teamId = sprintId = "";
+        teams = [];
+        sprints = [];
+        dashboard = null;
+        stale = false;
+        error = null;
+        if (projectId.Length == 0) return;
+        busy = true;
+        try
+        {
+            var result = await Service.ListTeamsAsync(projectId);
+            if (result.IsFailure) error = result.Error!.Message;
+            else teams = result.Value;
+        }
+        catch (Exception) { error = "Não foi possível carregar as equipes. Tente novamente."; }
+        finally { busy = false; }
+    }
+
+    private async Task OnTeamChanged(ChangeEventArgs args)
+    {
+        teamId = args.Value?.ToString() ?? "";
+        sprintId = "";
+        sprints = [];
+        dashboard = null;
+        stale = false;
+        error = null;
+        if (teamId.Length == 0) return;
+        busy = true;
+        try
+        {
+            var result = await Service.ListSprintsAsync(projectId, teamId);
+            if (result.IsFailure) error = result.Error!.Message;
+            else
+            {
+                sprints = result.Value;
+                var today = Service.Today;
+                var current = sprints.Where(sprint => sprint.Start <= today && sprint.End >= today).ToArray();
+                if (current.Length == 1) { sprintId = current[0].Id; await Load(false); }
+            }
+        }
+        catch (Exception) { error = "Não foi possível carregar as sprints. Tente novamente."; }
+        finally { busy = false; }
+    }
+
+    private async Task OnSprintChanged(ChangeEventArgs args)
+    {
+        sprintId = args.Value?.ToString() ?? "";
+        dashboard = null;
+        stale = false;
+        error = null;
+        if (sprintId.Length > 0) await Load(false);
+    }
+
+    private async Task OnReferenceChanged(ChangeEventArgs args)
+    {
+        referenceText = args.Value?.ToString() ?? "";
+        if (sprintId.Length > 0) await Load(false);
+    }
+
+    private Task Refresh() => Load(true);
+
+    private async Task Load(bool force)
+    {
+        var sprint = sprints.FirstOrDefault(item => item.Id == sprintId);
+        if (sprint is null) return;
+        if (!DateOnly.TryParseExact(referenceText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var reference))
+        { error = "Informe uma data de referência válida."; stale = dashboard is not null; return; }
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Service.GetDashboardAsync(projectId, teamId, sprint, reference, force);
+            if (result.IsFailure) { error = result.Error!.Message; stale = dashboard is not null; }
+            else { dashboard = result.Value; stale = false; }
+        }
+        catch (Exception) { error = "Ocorreu um erro inesperado. Tente atualizar novamente."; stale = dashboard is not null; }
+        finally { busy = false; }
+    }
+
+    private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
+    private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
+    private static string Percent(decimal? value) => value is null ? "N/A" : $"{value.Value.ToString("N2", Pt)}%";
+    private static string VarianceClass(decimal? value) => value is null ? "" : value < 0 ? "negative" : value > 0 ? "positive" : "";
+    private static string CategoryLabel(string category) => category switch
+    {
+        "Proposed" => "Propostas", "InProgress" => "Em andamento", "Resolved" => "Resolvidas",
+        "Completed" => "Concluídas", "Removed" => "Removidas", _ => category
+    };
+}
