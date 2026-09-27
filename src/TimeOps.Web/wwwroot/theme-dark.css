@@ -1,0 +1,199 @@
+/* TimeOps dark palette. Loaded last so the existing layout and responsive rules stay intact. */
+:root {
+    color-scheme: dark;
+    --canvas: #111a27;
+    --sidebar: #0e1723;
+    --surface: #182537;
+    --surface-raised: #203149;
+    --surface-deep: #132031;
+    --line: #30445e;
+    --line-strong: #45617f;
+    --ink: #edf4ff;
+    --muted: #adbed2;
+    --quiet: #91a8c0;
+    --blue: #77b5ff;
+    --blue-deep: #2868c3;
+    --positive-ink: #72dec0;
+    --negative-ink: #ff9a88;
+    --warning-ink: #ffd28c;
+    --metric-info-ink: #9bb6d3;
+    background: var(--canvas);
+    color: var(--ink);
+}
+
+body { background: var(--canvas); color: var(--ink); }
+::selection { background: #3774bd; color: #fff; }
+:focus-visible { outline-color: #8ac2ff; }
+* { scrollbar-color: #4a6789 #111c2b; }
+input, select, button { color-scheme: dark; }
+input::placeholder { color: #91a8c0; }
+a { text-underline-offset: 3px; }
+
+/* Shell and navigation */
+.sidebar { background: var(--sidebar); color: var(--ink); border-right: 1px solid #1d314b; }
+.brand-mark { background: var(--blue); color: #081522; }
+.brand-light { color: #adc2d9; }
+.sidebar-heading { color: #94abc5; }
+.nav-current { background: #172c48; color: #eef6ff; }
+.nav-current:hover { background: #203b5c; }
+.nav-dot, .status-pulse, .collected-dot { background: #72b9ff; }
+.sidebar-foot { color: var(--muted); }
+.page-header h1, .section-header h2, .person-toolbar h2, .empty-state h2, .empty-state h1 { color: var(--ink); }
+.page-header p, .section-header p, .collected, .context-line, .section-count, .person-toolbar p { color: var(--muted); }
+.context-line span:first-child { color: #dceaff; }
+.divider { color: #607b98; }
+
+/* Controls and connection */
+.filters, .connection-panel { background: var(--surface); border-color: var(--line); box-shadow: 0 12px 28px rgba(0, 0, 0, .18); }
+.field label { color: #b8cbe0; }
+.field select, .field input, .person-picker select {
+    background: var(--surface-deep);
+    border-color: var(--line-strong);
+    color: var(--ink);
+    caret-color: var(--blue);
+}
+.field select:hover:not(:disabled), .field input:hover:not(:disabled) { border-color: #6084ad; }
+.field select:focus-visible, .field input:focus-visible { border-color: var(--blue); }
+.connection-copy h2 { color: var(--ink); }
+.connection-copy p { color: var(--muted); }
+.refresh, .connect-button { background: var(--blue-deep); color: #fff; }
+.refresh:hover:not(:disabled), .connect-button:hover:not(:disabled) { background: #347ddd; }
+.refresh:active:not(:disabled), .connect-button:active:not(:disabled) { background: #1f58a8; }
+.connection-change { background: var(--surface-raised); border-color: var(--line-strong); color: #dceaff; }
+.connection-change:hover:not(:disabled) { background: #223854; }
+button:disabled, .field select:disabled, .field input:disabled { opacity: .55; }
+
+/* Feedback and empty states */
+.notice.loading { background: #122c46; color: #b9dbff; }
+.notice.error { background: #39202a; color: #ffd4cf; }
+.notice.warning { background: #33291c; color: var(--warning-ink); }
+.empty-state p { color: var(--muted); }
+.empty-state .hint { color: var(--warning-ink); }
+.empty-symbol span { background: #365d88; }
+.empty-symbol span:nth-child(2) { background: #6caeff; }
+.empty-state a { color: var(--blue); }
+#blazor-error-ui { background: #482632; color: #fff2f0; }
+#blazor-error-ui a { color: #d6e8ff; }
+
+/* Team totals and data quality */
+.summary { background: var(--surface); border-color: var(--line); }
+.summary-primary { background: #172d4c; }
+.summary > div + div { border-color: var(--line); }
+.summary p { color: #b9cbe0; }
+.summary strong { color: var(--ink); }
+.summary span { color: #a6bbd1; }
+.summary-primary strong { color: #eef6ff; }
+.negative { color: var(--negative-ink) !important; }
+.positive { color: var(--positive-ink) !important; }
+.data-quality, .person-warnings { background: #2a211a; border-color: #654d32; color: #ffddab; }
+.data-quality > summary:hover { background: #36291c; }
+.data-quality-icon { background: #4a3620; color: #ffd28c; }
+.data-quality-copy > span, .data-quality-expand, .warning-group h3 span { color: #e6c699; }
+.warning-group { border-color: #644d35; }
+
+/* People table and supporting data */
+.section-header .table-hint { color: var(--quiet); }
+.table-scroll { background: var(--surface); border-color: var(--line); scrollbar-color: #527095 var(--surface-deep); }
+.table-scroll thead { background: var(--surface-raised); }
+.table-scroll th, .table-scroll td { border-color: var(--line); color: #e3edfa; }
+.table-scroll thead th { color: #b1c6dd; }
+.table-scroll thead th:first-child { background: var(--surface-raised); box-shadow: 1px 0 0 var(--line); }
+.table-scroll tbody th:first-child { background: var(--surface); box-shadow: 1px 0 0 var(--line); }
+.table-scroll tbody tr:hover, .table-scroll tbody tr:hover th:first-child { background: #1a2b41; }
+.table-scroll tbody tr.unassigned, .table-scroll tbody tr.unassigned th:first-child { background: #241f21; }
+.table-scroll tbody tr.unassigned:hover, .table-scroll tbody tr.unassigned:hover th:first-child { background: #302629; }
+.table-scroll summary small { color: var(--quiet); }
+.table-scroll .no-data { color: var(--muted); }
+.task-list { background: var(--surface-deep); }
+.task-item { border-color: var(--line); }
+.task-item a { color: #8cc4ff; }
+.task-item span { color: var(--muted); }
+.mobile-metric-guide { background: var(--surface); border-color: var(--line); color: #c2d4e7; }
+.mobile-metric-guide > div > span { border-color: var(--line); }
+.secondary-stats > div { border-color: var(--line-strong); }
+.secondary-stats span, .secondary-stats small, .state-counts, .method-note { color: var(--muted); }
+.secondary-stats strong { color: var(--ink); }
+.state-count { background: #1a2d43; color: #bfd3e9; }
+.state-count strong { color: #eef5ff; }
+
+/* Metric explanations */
+.metric-info-trigger { color: var(--metric-info-ink); }
+.metric-info-trigger:hover { background: #254469; color: #d3e8ff; }
+.metric-info-popover:popover-open {
+    background: #1a2a40;
+    border-color: #496681;
+    color: var(--ink);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
+}
+.metric-info-popover strong, .summary .metric-info-popover strong, .secondary-stats .metric-info-popover strong { color: var(--ink); }
+.metric-info-popover span, .summary .metric-info-popover span, .secondary-stats .metric-info-popover span { color: #c4d5e8; }
+
+/* View switch and personal metrics */
+.view-switch { background: #101e30; border-color: var(--line); }
+.view-switch button { color: #b8cae0; }
+.view-switch button:hover:not(.active) { background: #1c304a; color: #f0f6ff; }
+.view-switch button.active { background: #285b9b; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .24); }
+.person-empty { background: var(--surface); border-color: var(--line); color: var(--muted); }
+.person-overview { background: var(--surface); border-color: var(--line); }
+.person-gauge-panel { background: #152941; }
+.person-work-panel { background: var(--surface); }
+.person-panel-heading h3, .comparison-heading h4, .person-detail-strip strong, .task-progress-heading strong { color: var(--ink); }
+.person-panel-heading p, .gauge-value span, .gauge-note, .comparison-label, .comparison-heading > span,
+.comparison-balance, .person-detail-strip span, .person-detail-strip small, .task-progress-heading,
+.task-progress-legend { color: var(--muted); }
+.gauge-track { stroke: #2b4b6d; }
+.gauge-fill { stroke: #79b7ff; }
+.gauge-fill.over { stroke: #ffc58e; }
+.gauge-value strong, .gauge-totals strong, .comparison-label strong, .comparison-balance strong,
+.task-progress-legend strong { color: var(--ink); }
+.gauge-totals, .gauge-totals > div + div { border-color: #36516e; }
+.gauge-totals span { color: #bdd0e6; }
+.person-comparison + .person-comparison { border-color: var(--line); }
+.comparison-track, .task-progress-track { background: #26384d; }
+.bar-completed { background: #70b4ff; }
+.bar-capacity { background: #809cbb; }
+.bar-remaining { background: #e6a776; }
+.comparison-unavailable { background: #1d2d41; color: #c1d3e7; }
+.person-detail-strip > div { border-color: var(--line-strong); }
+.task-progress { background: var(--surface); border-color: var(--line); }
+.task-progress-track > span + span { box-shadow: -2px 0 0 var(--surface); }
+.state-proposed { background: #98adc8; }
+.state-progress { background: #669ddd; }
+.state-resolved { background: #c8ad78; }
+.state-completed { background: #69c3ae; }
+.state-removed { background: #a78d96; }
+.state-other { background: #a88dce; }
+.person-task-details { background: var(--surface); border-color: var(--line); }
+.person-task-details > summary { color: #99cbff; }
+
+/* Blazor connection recovery */
+#components-reconnect-modal#components-reconnect-modal { background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line-strong); }
+#components-reconnect-modal::backdrop { background: rgba(2, 6, 12, .72); }
+#components-reconnect-modal#components-reconnect-modal button { background: var(--blue-deep); color: #fff; }
+#components-reconnect-modal#components-reconnect-modal button:hover { background: #347ddd; }
+.components-rejoining-animation div { border-color: var(--blue); }
+
+@media (max-width: 1050px) {
+    .person-work-panel { border-top-color: var(--line); }
+    .gauge-totals > div + div { border-top-color: #36516e; }
+}
+
+@media (max-width: 760px) {
+    .table-scroll { background: transparent; border-color: transparent; }
+    .table-scroll tbody tr { background: var(--surface); border-color: var(--line); }
+    .table-scroll tbody tr.unassigned { background: #241f21; }
+    .table-scroll tbody tr:hover { background: #1a2b41; }
+    .table-scroll tbody tr.unassigned:hover { background: #302629; }
+    .table-scroll tbody th:first-child, .table-scroll tbody tr:hover th:first-child,
+    .table-scroll tbody tr.unassigned th:first-child, .table-scroll tbody tr.unassigned:hover th:first-child { background: transparent; box-shadow: none; }
+    .table-scroll tbody td { border-color: var(--line); }
+    .table-scroll tbody td::before { color: #a9bfd6; }
+}
+
+@media (max-width: 460px) {
+    .summary > div + div, .summary > div:nth-child(even), .summary > div:nth-child(n + 3) { border-color: var(--line); }
+}
+
+@media (max-width: 380px) {
+    .gauge-totals > div + div { border-top-color: #36516e; }
+}
