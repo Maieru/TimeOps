@@ -70,5 +70,6 @@ Acesso simultâneo da equipe, login corporativo, consolidação entre equipes, s
 - [REST API: configurações de trabalho da equipe](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/?view=azure-devops-rest-7.1)
 - [REST API: folgas da equipe](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/teamdaysoff/get?view=azure-devops-rest-7.1)
 - [Autenticação com PAT](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops)
+- [REST API: atualizações de work items](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/updates/list?view=azure-devops-rest-7.1)
 - [Gerenciamento seguro de credenciais no Windows](https://learn.microsoft.com/en-us/windows/win32/secbp/handling-passwords)
 - [Autenticação com Microsoft Entra ID, para evolução futura](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/entra?view=azure-devops)

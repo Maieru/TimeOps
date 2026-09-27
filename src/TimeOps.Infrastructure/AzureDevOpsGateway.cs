@@ -12,7 +12,7 @@ using TimeOps.Domain;
 
 namespace TimeOps.Infrastructure;
 
-public sealed class AzureDevOpsGateway(
+public sealed partial class AzureDevOpsGateway(
     HttpClient client, RuntimeConnection connection,
     IMemoryCache cache, TimeProvider clock, ILogger<AzureDevOpsGateway> logger) : IDevOpsGateway
 {

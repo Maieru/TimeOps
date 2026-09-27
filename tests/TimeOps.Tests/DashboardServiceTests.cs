@@ -78,13 +78,36 @@ public sealed class DashboardServiceTests
         Assert.False(service.HasConnection);
     }
 
+    [Fact]
+    public async Task Historico_consulta_as_ultimas_24_horas_exatas()
+    {
+        var now = new DateTimeOffset(2026, 9, 27, 15, 30, 0, TimeSpan.Zero);
+        var gateway = new FakeGateway();
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), new FixedClock(now), "America/Sao_Paulo");
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", null, null);
+
+        var result = await service.GetLastDayEffortHistoryAsync("project", "team", sprint);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(now.AddHours(-24), gateway.HistoryFrom);
+        Assert.Equal(now, gateway.HistoryTo);
+    }
+
     private sealed class FakeGateway : IDevOpsGateway
     {
         public bool Fail { get; init; }
         public bool Forced { get; private set; }
+        public DateTimeOffset? HistoryFrom { get; private set; }
+        public DateTimeOffset? HistoryTo { get; private set; }
         public Task<Result<IReadOnlyList<NamedItem>>> ListProjectsAsync(CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<NamedItem>>.Success([]));
         public Task<Result<IReadOnlyList<NamedItem>>> ListTeamsAsync(string projectId, CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<NamedItem>>.Success([]));
         public Task<Result<IReadOnlyList<Sprint>>> ListSprintsAsync(string projectId, string teamId, CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<Sprint>>.Success([]));
+        public Task<Result<EffortHistory>> LoadEffortHistoryAsync(string projectId, string teamId, Sprint sprint, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        {
+            HistoryFrom = from;
+            HistoryTo = to;
+            return Task.FromResult(Result<EffortHistory>.Success(new(from, to, to, [])));
+        }
         public Task<Result<SprintSnapshot>> LoadSnapshotAsync(string projectId, string teamId, Sprint sprint, bool forceRefresh, CancellationToken cancellationToken)
         {
             Forced = forceRefresh;

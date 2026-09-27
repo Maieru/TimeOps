@@ -12,7 +12,7 @@ Oferecer visibilidade sobre capacidade, horas registradas e trabalho restante da
 | RN-02 | P0 | Selecionar automaticamente a sprint atual apenas quando houver uma única correspondência; caso contrário, solicitar seleção explícita. |
 | RN-03 | P0 | Usar somente Tasks da iteração selecionada e das áreas configuradas para a equipe, respeitando a inclusão de subáreas. |
 | RN-04 | P0 | Considerar cada Task uma vez, pelo seu ID, em qualquer estado. Não agregar horas de outros tipos de work item nem valores herdados de itens pai. |
-| RN-05 | P0 | Atribuir o total atual de cada Task ao seu responsável atual, identificado por identidade estável. Não reconstruir autoria ou data de apontamentos. |
+| RN-05 | P0 | Atribuir o total atual de cada Task ao seu responsável atual, identificado por identidade estável. Não reconstruir autoria ou data de apontamentos para os totais; o histórico de revisões é separado. |
 | RN-06 | P0 | Exibir a união das pessoas com capacidade e dos responsáveis pelas Tasks da consulta, incluindo pessoas sem tarefas ou sem capacidade. Exibir Tasks sem responsável em grupo separado. |
 | RN-07 | P1 | Permitir abrir o detalhamento das Tasks de cada soma, com ID, título, responsável, estado, campos de esforço e link para o DevOps. |
 | RN-08 | P0 | Exibir contexto, data de referência e horário da coleta, identificando o resultado como retrato atual. |
@@ -47,6 +47,8 @@ Considere `C(p)` a capacidade diária da pessoa, `D(p)` a quantidade de dias ele
 **RN-23 — Totais da equipe (P0).** Somar os valores das pessoas e incluir as horas das Tasks sem responsável no total de trabalho, discriminando esse grupo. Deduplicar por Task ID. Calcular a cobertura da equipe dividindo a soma de horas registradas pela soma de horas esperadas, nunca pela média dos percentuais individuais. Se faltar capacidade para alguma pessoa envolvida, sinalizar o total de capacidade conhecido como parcial e não apresentar diferença ou cobertura global como completas.
 
 **RN-24 — Significado temporal (P0).** A data de referência afeta somente a capacidade esperada e restante. Os campos de esforço e as atribuições continuam atuais. A interface deve deixar explícita essa diferença, inclusive ao consultar sprints passadas. Não denominar o resultado como horas efetivamente trabalhadas até a data selecionada.
+
+**RN-31 — Histórico de alterações de horas (P1).** Mostrar as alterações feitas nas últimas 24 horas, contadas do momento da consulta, nos campos Completed Work, Original Estimate e Remaining Work das Tasks que pertencem atualmente à sprint e às áreas da equipe. Exibir Task, horário, autor da alteração no DevOps, valor anterior, valor novo, diferença e link. Uma mudança de Completed Work de 3 h para 8 h será exibida como +5 h. O autor é quem revisou o item, não necessariamente o responsável atual. O histórico representa diferenças entre revisões de campos, não sessões de trabalho ou apontamentos individuais. Tasks movidas para fora do escopo atual não aparecem. Falhas de paginação ou dados essenciais não gerarão histórico parcial com aparência de completo.
 
 ## Qualidade dos dados e apresentação
 
@@ -83,7 +85,10 @@ Considere `C(p)` a capacidade diária da pessoa, `D(p)` a quantidade de dias ele
 | CA-18 | Duas Tasks Completed entre quatro Tasks; depois, consulta sem Tasks | Progresso 50%; sem Tasks, não aplicável | RN-22 |
 | CA-19 | Alteração da referência para uma data passada | Recalcular capacidade; manter Completed atual e explicar essa condição | RN-24 |
 | CA-20 | Falha de permissão ou consulta parcialmente concluída | Informar erro; não mostrar totais incompletos como válidos | RN-28 |
+| CA-21 | Completed Work da Task 123 muda de 3 h para 8 h por Ana nas últimas 24 horas | Histórico mostra +5 h, 3 h → 8 h, Ana, horário e link da Task | RN-31 |
+| CA-22 | Estimativa e trabalho restante mudam na mesma revisão; outra mudança ocorreu fora das 24 horas | Uma linha por campo alterado no período; mudança antiga não aparece | RN-31 |
+| CA-23 | Uma página de atualizações falha ou uma Task sai da sprint | Falha impede histórico parcial; Task fora do escopo atual não aparece | RN-31 |
 
 ## Fora do escopo inicial
 
-Escrita no DevOps, apontamento de horas pelo aplicativo, reconstrução histórica, login corporativo, acesso simultâneo da equipe, consolidação entre equipes, notificações e exportação.
+Escrita no DevOps, apontamento de horas pelo aplicativo, reconstrução histórica dos totais por pessoa, login corporativo, acesso simultâneo da equipe, consolidação entre equipes, notificações e exportação.

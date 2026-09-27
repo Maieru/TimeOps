@@ -40,3 +40,17 @@ public sealed record Dashboard(
     Sprint Sprint, DateOnly ReferenceDate, DateTimeOffset CollectedAt,
     IReadOnlyList<PersonMetrics> People, PersonMetrics? Unassigned,
     TeamMetrics Team, IReadOnlyList<DataWarning> Warnings);
+
+public enum EffortField { Completed, Original, Remaining }
+
+public sealed record EffortChange(
+    int TaskId, string TaskTitle, string TaskUrl, int UpdateId,
+    DateTimeOffset ChangedAt, Person? ChangedBy, EffortField Field,
+    decimal? Before, decimal? After)
+{
+    public decimal Delta => (After ?? 0) - (Before ?? 0);
+}
+
+public sealed record EffortHistory(
+    DateTimeOffset From, DateTimeOffset To, DateTimeOffset CollectedAt,
+    IReadOnlyList<EffortChange> Changes);

@@ -49,6 +49,15 @@ public sealed class DashboardService(IDevOpsGateway gateway, IRuntimeConnection 
     public Task<Result<IReadOnlyList<Sprint>>> ListSprintsAsync(string projectId, string teamId, CancellationToken cancellationToken = default)
         => gateway.ListSprintsAsync(projectId, teamId, cancellationToken);
 
+    public Task<Result<EffortHistory>> GetLastDayEffortHistoryAsync(string projectId, string teamId, Sprint sprint,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(teamId) || string.IsNullOrWhiteSpace(sprint.Id))
+            return Task.FromResult(Result<EffortHistory>.Failure(new("context.invalid", ErrorCategory.Validation, "Selecione projeto, equipe e sprint.")));
+        var to = clock.GetUtcNow();
+        return gateway.LoadEffortHistoryAsync(projectId, teamId, sprint, to.AddHours(-24), to, cancellationToken);
+    }
+
     public async Task<Result<Dashboard>> GetDashboardAsync(string projectId, string teamId, Sprint sprint,
         DateOnly? referenceDate, bool forceRefresh = false, CancellationToken cancellationToken = default)
     {

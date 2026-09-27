@@ -2,11 +2,11 @@
 
 ## Plataforma e limites da entrega
 
-**RT-01.** Implementar futuramente o piloto em C#, .NET 10 LTS e ASP.NET Core, com Blazor Web App em modo interativo no servidor. A aplicação terá um único processo de implantação e não utilizará banco de dados.
+**RT-01.** Implementar o piloto em C#, .NET 10 LTS e ASP.NET Core, com Blazor Web App em modo interativo no servidor. A aplicação terá um único processo de implantação e não utilizará banco de dados.
 
 **RT-02.** O piloto deverá escutar exclusivamente em interfaces de loopback. Será usado localmente, sem login próprio, para consultar uma organização configurada e uma equipe por vez. Compartilhamento em rede exigirá uma nova etapa de autenticação e hospedagem.
 
-Este documento especifica o aplicativo; esta entrega documental não cria projetos .NET nem implementa integrações.
+Este documento registra os requisitos do aplicativo implementado e suas limitações.
 
 ## Clean Architecture obrigatória
 
@@ -68,6 +68,8 @@ Este documento especifica o aplicativo; esta entrega documental não cria projet
 
 **RT-17.** A integração será somente de leitura: não criar, alterar ou excluir dados do DevOps. Operações de consulta que usem HTTP POST, como WIQL e leitura em lote, continuam permitidas; o critério é ausência de mutação, não apenas o verbo HTTP.
 
+**RT-36.** Consultar atualizações dos work items via API REST 7.1, com WIQL por data de modificação, iteração e áreas da equipe, leitura em lotes dos candidatos e paginação de todas as atualizações relevantes. Usar `System.ChangedDate` da atualização como horário da mudança, evitando interpretar `revisedDate` — que pode ser uma data de fechamento ou sentinela — como horário de edição. Usar `revisedBy` como autor e calcular a diferença entre `oldValue` e `newValue` dos três campos de esforço. Exibir apenas resultados completos e informar limites explícitos de consulta.
+
 ## Segurança e configuração
 
 **RT-18.** Usar PAT com permissões mínimas de leitura requeridas pelos endpoints, incluindo leitura de work items e de projetos/equipes. Documentar na implementação os escopos efetivamente necessários e validar a conexão sem solicitar acesso total à organização.
@@ -97,6 +99,8 @@ Este documento especifica o aplicativo; esta entrega documental não cria projet
 **RT-28.** Apresentar português, datas no fuso configurado e horas com duas casas decimais. Exibir sinais da diferença, unidades, disponibilidade e avisos textuais, sem depender apenas de cor.
 
 **RT-29.** Mostrar seleção de projeto/equipe/sprint, referência de capacidade, horário da coleta, atualização manual, resumo da equipe, métricas por pessoa e detalhamento das Tasks. Explicitar que Completed é atual, inclusive ao selecionar datas passadas.
+
+**RT-37.** Oferecer aba de histórico de horas das últimas 24 horas, consultada sob demanda e atualizada pelo botão manual. Mostrar autor da alteração, valor anterior, novo valor, delta e horário no fuso configurado; distinguir revisão de campo de apontamento de tempo. Não expor histórico parcial como completo.
 
 ## Estratégia de testes e aceite técnico
 

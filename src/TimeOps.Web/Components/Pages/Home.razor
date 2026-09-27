@@ -125,6 +125,7 @@ else
     <nav class="view-switch" aria-label="Visualização do painel">
         <button type="button" class="@(viewMode == DashboardView.Team ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Team)" @onclick="() => viewMode = DashboardView.Team">Equipe</button>
         <button type="button" class="@(viewMode == DashboardView.Person ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Person)" @onclick="() => viewMode = DashboardView.Person">Pessoa</button>
+        <button type="button" class="@(viewMode == DashboardView.History ? "active" : "")" aria-pressed="@(viewMode == DashboardView.History)" @onclick="ShowHistory" disabled="@busy">Histórico 24 h</button>
     </nav>
 
     @if (viewMode == DashboardView.Team)
@@ -226,7 +227,7 @@ else
 
     <p class="method-note">Completed mostra o valor atual das Tasks atribuídas agora. A data escolhida altera a capacidade esperada, mas não reconstrói horas passadas. Estes dados não representam uma avaliação automática de produtividade.</p>
     }
-    else
+    else if (viewMode == DashboardView.Person)
     {
         <section class="person-toolbar" aria-label="Selecionar pessoa">
             <div><h2>Visão pessoal</h2><p>Escolha uma pessoa para conferir sua capacidade, horas e Tasks nesta sprint.</p></div>
@@ -251,6 +252,43 @@ else
         {
             <div class="person-empty">Nenhuma pessoa com capacidade ou Task nesta sprint.</div>
         }
+    }
+    else
+    {
+        <section class="history-panel" aria-label="Histórico de alterações nas horas">
+            <div class="history-heading">
+                <div><h2>Alterações nas últimas 24 horas</h2><p>Tasks que estão nesta sprint e no escopo da equipe. A pessoa indicada é quem alterou o item no Azure DevOps.</p></div>
+                @if (history is not null)
+                {
+                    <span>Coletado em @Service.LocalTime(history.CollectedAt).ToString("dd/MM 'às' HH:mm", Pt)</span>
+                }
+            </div>
+            @if (history is null)
+            {
+                <div class="history-empty">@(busy ? "Buscando alterações no Azure DevOps…" : "O histórico não pôde ser carregado. Use Atualizar para tentar novamente.")</div>
+            }
+            else if (history.Changes.Count == 0)
+            {
+                <div class="history-empty">Nenhuma alteração de horas foi encontrada neste período para as Tasks do escopo atual.</div>
+            }
+            else
+            {
+                <ol class="history-list">
+                    @foreach (var change in history.Changes)
+                    {
+                        <li class="history-entry">
+                            <time datetime="@change.ChangedAt.ToString("O")">@Service.LocalTime(change.ChangedAt).ToString("dd/MM 'às' HH:mm", Pt)</time>
+                            <div class="history-entry-main">
+                                <a href="@change.TaskUrl" target="_blank" rel="noopener noreferrer">#@change.TaskId · @change.TaskTitle</a>
+                                <span>@EffortLabel(change.Field) · @(change.ChangedBy?.Name ?? "Autor não informado")</span>
+                            </div>
+                            <div class="history-values"><strong class="@VarianceClass(change.Delta)">@SignedHours(change.Delta)</strong><span>@Hours(change.Before) → @Hours(change.After)</span></div>
+                        </li>
+                    }
+                </ol>
+            }
+            <p class="history-note">Cada linha mostra a diferença entre duas revisões do campo, não um apontamento de horas separado. Tasks que saíram da sprint ou da área da equipe não fazem parte desta consulta.</p>
+        </section>
     }
 }
 
@@ -288,6 +326,7 @@ else
     private bool rememberConnection;
     private bool savedConnectionNeedsRemoval;
     private Dashboard? dashboard;
+    private EffortHistory? history;
     private string? error;
     private string errorTitle = "Não foi possível atualizar.";
     private bool busy;
@@ -296,9 +335,42 @@ else
     private string? selectedPersonId;
     private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
         ?? dashboard?.People.FirstOrDefault();
-    private enum DashboardView { Team, Person }
+    private enum DashboardView { Team, Person, History }
 
     private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
+
+    private async Task ShowHistory()
+    {
+        viewMode = DashboardView.History;
+        if (history is null) await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        var sprint = sprints.FirstOrDefault(item => item.Id == sprintId);
+        if (sprint is null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Service.GetLastDayEffortHistoryAsync(projectId, teamId, sprint);
+            if (result.IsFailure)
+            {
+                history = null;
+                errorTitle = "Não foi possível carregar o histórico.";
+                error = result.Error!.Message;
+            }
+            else history = result.Value;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Falha inesperada ao carregar histórico de horas");
+            history = null;
+            errorTitle = "Não foi possível carregar o histórico.";
+            error = "Ocorreu um erro inesperado. Tente atualizar novamente.";
+        }
+        finally { busy = false; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -363,6 +435,7 @@ else
         sprints = [];
         projectId = teamId = sprintId = "";
         dashboard = null;
+        history = null;
         errorTitle = "Não foi possível esquecer a conexão.";
         error = forgotten.IsFailure ? forgotten.Error!.Message : null;
         stale = false;
@@ -377,6 +450,7 @@ else
         teams = [];
         sprints = [];
         dashboard = null;
+        history = null;
         stale = false;
         error = null;
         if (projectId.Length == 0) return;
@@ -397,6 +471,7 @@ else
         sprintId = "";
         sprints = [];
         dashboard = null;
+        history = null;
         stale = false;
         error = null;
         if (teamId.Length == 0) return;
@@ -421,6 +496,7 @@ else
     {
         sprintId = args.Value?.ToString() ?? "";
         dashboard = null;
+        history = null;
         stale = false;
         error = null;
         if (sprintId.Length > 0) await Load(false);
@@ -449,9 +525,11 @@ else
             else
             {
                 dashboard = result.Value;
+                history = null;
                 stale = false;
                 if (!dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
                     selectedPersonId = dashboard.People.FirstOrDefault()?.Person?.Id;
+                if (viewMode == DashboardView.History) await LoadHistory();
             }
         }
         catch (Exception) { error = "Ocorreu um erro inesperado. Tente atualizar novamente."; stale = dashboard is not null; }
@@ -484,5 +562,12 @@ else
     {
         "Proposed" => "Propostas", "InProgress" => "Em andamento", "Resolved" => "Resolvidas",
         "Completed" => "Concluídas", "Removed" => "Removidas", _ => category
+    };
+    private static string EffortLabel(EffortField field) => field switch
+    {
+        EffortField.Completed => "Horas registradas (Completed)",
+        EffortField.Original => "Estimativa original",
+        EffortField.Remaining => "Trabalho restante",
+        _ => "Horas"
     };
 }
