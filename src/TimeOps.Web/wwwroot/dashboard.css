@@ -503,8 +503,20 @@
 .gauge svg { display: block; width: 100%; height: auto; overflow: visible; }
 .gauge path { fill: none; stroke-width: 19; stroke-linecap: round; }
 .gauge-track { stroke: #bddad4; }
-.gauge-fill { stroke: #128077; }
+.gauge-fill {
+    stroke: #128077;
+    stroke-dasharray: 100 100;
+    stroke-dashoffset: var(--gauge-offset);
+    animation: gauge-sweep 700ms cubic-bezier(.16, 1, .3, 1) both;
+}
 .gauge-fill.over { stroke: #a75331; }
+@keyframes gauge-sweep {
+    from { stroke-dashoffset: 100; }
+    to { stroke-dashoffset: var(--gauge-offset); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gauge-fill { animation: none; }
+}
 .gauge-value { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: end; align-items: center; padding-bottom: 3px; pointer-events: none; }
 .gauge-value strong { color: #17343d; font-size: clamp(33px, 3.5vw, 44px); line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .gauge-value span { margin-top: 4px; color: #47636d; font-size: 12px; }

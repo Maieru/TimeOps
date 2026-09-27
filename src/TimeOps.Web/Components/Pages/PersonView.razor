@@ -8,12 +8,12 @@
                 <h3>Cobertura até @ReferenceDate.ToString("dd/MM/yyyy") <MetricInfo Title="Cobertura" Description="@CoverageHelp" /></h3>
                 <p>Horas registradas ÷ capacidade esperada</p>
             </div>
-            <div class="gauge" role="img" aria-label="@GaugeAccessibleLabel">
+            <div class="gauge" @key="GaugeAnimationKey" role="img" aria-label="@GaugeAccessibleLabel">
                 <svg viewBox="0 0 300 180" aria-hidden="true" focusable="false">
                     <path class="gauge-track" d="M 24 158 A 126 126 0 0 1 276 158" pathLength="100" />
-                    @if (Person.Coverage is not null)
+                    @if (Person.Coverage > 0)
                     {
-                        <path class="gauge-fill @(Person.Coverage > 100 ? "over" : "")" d="M 24 158 A 126 126 0 0 1 276 158" pathLength="100" stroke-dasharray="@GaugeDash" />
+                        <path class="gauge-fill @(Person.Coverage > 100 ? "over" : "")" d="M 24 158 A 126 126 0 0 1 276 158" pathLength="100" style="--gauge-offset: @GaugeOffset" />
                     }
                 </svg>
                 <div class="gauge-value"><strong>@CoverageText</strong><span>de cobertura</span></div>
@@ -128,7 +128,8 @@
         .Select(group => new KeyValuePair<string, int>(group.Key, group.Count()))
         .OrderBy(group => StateOrder(group.Key));
     private decimal GaugeFill => Math.Clamp(Person.Coverage ?? 0, 0, 100);
-    private string GaugeDash => $"{GaugeFill.ToString(CultureInfo.InvariantCulture)} 100";
+    private string GaugeOffset => (100 - GaugeFill).ToString(CultureInfo.InvariantCulture);
+    private (string?, DateOnly, decimal?) GaugeAnimationKey => (Person.Person?.Id, ReferenceDate, Person.Coverage);
     private string CoverageText => Person.Coverage is not null ? $"{Person.Coverage.Value.ToString("N1", Pt)}%" : Person.Expected == 0 && Person.Completed is not null ? "N/A" : "—";
     private string GaugeAccessibleLabel => Person.Coverage is not null ? $"Cobertura de {CoverageText}: {Hours(Person.Completed)} registradas para {Hours(Person.Expected)} esperadas." : $"Cobertura {CoverageNote}";
     private string CoverageNote => Person.Coverage is not null
