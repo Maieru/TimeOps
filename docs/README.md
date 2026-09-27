@@ -13,7 +13,7 @@ Os indicadores apoiam o acompanhamento de capacidade, planejamento e preenchimen
 - [Requisitos de negócio](requisitos-negocio.md): escopo, fórmulas, regras e critérios de aceite.
 - [Requisitos técnicos](requisitos-tecnicos.md): Clean Architecture, integração, segurança, operação e testes.
 
-Esta entrega contém somente documentação. Os projetos, integrações e testes descritos ainda deverão ser implementados.
+O aplicativo e os testes estão implementados; os documentos registram as regras e os limites do piloto.
 
 ## Decisões aprovadas
 
@@ -22,11 +22,11 @@ Esta entrega contém somente documentação. Os projetos, integrações e testes
 | Fonte de verdade | Azure DevOps Services, com integração somente de leitura |
 | Abrangência | Uma organização; seleção de projeto, equipe e sprint; uma equipe por consulta |
 | Público | Ferramenta destinada à equipe interna, com piloto usado localmente por uma pessoa |
-| Acesso inicial | Localhost; organização e PAT informados no aplicativo, mantidos apenas em memória por sessão Blazor; sem login próprio no piloto |
+| Acesso inicial | Localhost; organização e PAT informados no aplicativo; persistência opcional no Gerenciador de Credenciais do Windows por usuário, sem login próprio no piloto |
 | Plataforma | C#, .NET 10 LTS e Blazor Web App interativo no servidor |
 | Arquitetura | Clean Architecture obrigatória, com quatro projetos e dependências verificadas |
 | Result pattern | Obrigatório em todas as camadas para representar sucesso e falhas esperadas das operações |
-| Persistência | Sem banco de dados; cache temporário em memória |
+| Persistência | Sem banco de dados; credencial opcional no cofre do Windows e cache de métricas temporário em memória |
 | Data de referência | Ontem por padrão; seleção de outra data até hoje |
 | Calendário e capacidade | Exclusivamente os dados cadastrados no DevOps |
 | Atribuição de horas | Retrato atual das Tasks, sem reconstrução histórica |
@@ -70,4 +70,5 @@ Acesso simultâneo da equipe, login corporativo, consolidação entre equipes, s
 - [REST API: configurações de trabalho da equipe](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/?view=azure-devops-rest-7.1)
 - [REST API: folgas da equipe](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/teamdaysoff/get?view=azure-devops-rest-7.1)
 - [Autenticação com PAT](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops)
+- [Gerenciamento seguro de credenciais no Windows](https://learn.microsoft.com/en-us/windows/win32/secbp/handling-passwords)
 - [Autenticação com Microsoft Entra ID, para evolução futura](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/entra?view=azure-devops)

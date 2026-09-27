@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 
 namespace TimeOps.Tests;
@@ -29,11 +30,15 @@ public sealed class ArchitectureTests
         }
     }
 
-    private static string FindRoot()
+    private static string FindRoot([CallerFilePath] string sourceFile = "")
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TimeOps.slnx"))) directory = directory.Parent;
-        return directory?.FullName ?? throw new InvalidOperationException("Solução não encontrada.");
+        foreach (var start in new[] { Path.GetDirectoryName(sourceFile)!, Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var directory = new DirectoryInfo(start);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TimeOps.slnx"))) directory = directory.Parent;
+            if (directory is not null) return directory.FullName;
+        }
+        throw new InvalidOperationException("Solução não encontrada.");
     }
 
     private static string[] References(string root, string layer)

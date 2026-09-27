@@ -10,7 +10,7 @@ public sealed class DashboardServiceTests
     {
         var gateway = new FakeGateway();
         var clock = new FixedClock(new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero));
-        var service = new DashboardService(gateway, new FakeConnection(), clock, "America/Sao_Paulo");
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), clock, "America/Sao_Paulo");
         var sprint = new Sprint("1", "Sprint", "Projeto\\Sprint", new(2026, 9, 21), new(2026, 9, 25));
 
         var result = await service.GetDashboardAsync("project", "team", sprint, null);
@@ -24,7 +24,7 @@ public sealed class DashboardServiceTests
     public async Task Falha_da_integracao_e_propagada_com_result()
     {
         var gateway = new FakeGateway { Fail = true };
-        var service = new DashboardService(gateway, new FakeConnection(), new FixedClock(new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero)), "America/Sao_Paulo");
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), new FixedClock(new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero)), "America/Sao_Paulo");
         var sprint = new Sprint("1", "Sprint", "Projeto\\Sprint", new(2026, 9, 21), new(2026, 9, 25));
 
         var result = await service.GetDashboardAsync("project", "team", sprint, null, true);
@@ -32,6 +32,50 @@ public sealed class DashboardServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal("devops.incomplete", result.Error!.Code);
         Assert.True(gateway.Forced);
+    }
+
+    [Fact]
+    public void Conexao_salva_e_restaurada_e_pode_ser_esquecida()
+    {
+        var store = new FakeStore();
+        var connection = new FakeConnection();
+        connection.Disconnect();
+        var service = new DashboardService(new FakeGateway(), connection, store, TimeProvider.System, "America/Sao_Paulo");
+
+        Assert.True(service.ConfigureConnection("org", "pat-de-teste", true).IsSuccess);
+        Assert.Equal("pat-de-teste", store.Saved!.PersonalAccessToken);
+        connection.Disconnect();
+        Assert.True(service.RestoreConnection().Value);
+        Assert.True(service.HasConnection);
+        Assert.Equal("pat-de-teste", connection.Token);
+
+        Assert.True(service.ForgetConnection().IsSuccess);
+        Assert.False(service.HasConnection);
+        Assert.Null(store.Saved);
+        Assert.False(service.RestoreConnection().Value);
+    }
+
+    [Fact]
+    public void Conexao_sem_persistencia_apaga_credencial_anterior()
+    {
+        var store = new FakeStore { Saved = new SavedConnection("org-antiga", "pat-antigo") };
+        var service = new DashboardService(new FakeGateway(), new FakeConnection(), store, TimeProvider.System, "America/Sao_Paulo");
+
+        Assert.True(service.ConfigureConnection("org-nova", "pat-novo", false).IsSuccess);
+        Assert.Null(store.Saved);
+        Assert.True(service.HasConnection);
+    }
+
+    [Fact]
+    public void Falha_ao_salvar_nao_deixa_conexao_ativa()
+    {
+        var store = new FakeStore { FailSave = true };
+        var service = new DashboardService(new FakeGateway(), new FakeConnection(), store, TimeProvider.System, "America/Sao_Paulo");
+
+        var result = service.ConfigureConnection("org", "pat-de-teste", true);
+
+        Assert.True(result.IsFailure);
+        Assert.False(service.HasConnection);
     }
 
     private sealed class FakeGateway : IDevOpsGateway
@@ -61,9 +105,25 @@ public sealed class DashboardServiceTests
     private sealed class FakeConnection : IRuntimeConnection
     {
         public string Organization { get; private set; } = "org";
+        public string Token { get; private set; } = "";
         public bool IsConfigured { get; private set; } = true;
         public Result Configure(string organization, string personalAccessToken)
-        { Organization = organization; IsConfigured = true; return Result.Success(); }
-        public void Disconnect() => IsConfigured = false;
+        { Organization = organization; Token = personalAccessToken; IsConfigured = true; return Result.Success(); }
+        public void Disconnect() { IsConfigured = false; Token = ""; }
+    }
+
+    private sealed class FakeStore : IConnectionStore
+    {
+        public bool IsAvailable => true;
+        public bool FailSave { get; init; }
+        public SavedConnection? Saved { get; set; }
+        public Result<SavedConnection?> Read() => Result<SavedConnection?>.Success(Saved);
+        public Result Save(SavedConnection connection)
+        {
+            if (FailSave) return Result.Failure(new("store.failed", ErrorCategory.Unavailable, "Falha ao salvar."));
+            Saved = connection;
+            return Result.Success();
+        }
+        public Result Delete() { Saved = null; return Result.Success(); }
     }
 }

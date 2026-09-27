@@ -20,7 +20,7 @@
             {
                 <div class="collected"><span class="collected-dot"></span> Coletado em @Service.LocalTime(dashboard.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</div>
             }
-            <button class="connection-change" type="button" @onclick="ChangeConnection" disabled="@busy">Trocar conexão</button>
+            <button class="connection-change" type="button" @onclick="ChangeConnection" disabled="@busy" title="Remove a credencial salva e permite conectar novamente">Esquecer e trocar conexão</button>
         </div>
     }
 </header>
@@ -30,7 +30,7 @@
     <form class="connection-panel" @onsubmit="ConnectAsync" @onsubmit:preventDefault autocomplete="off">
         <div class="connection-copy">
             <h2>Conectar ao Azure DevOps</h2>
-            <p>Informe a organização e um PAT com permissões de leitura. Os dados ficam somente nesta sessão local.</p>
+            <p>Informe a organização e um PAT com permissões de leitura.</p>
         </div>
         <div class="field">
             <label for="organization">Organização</label>
@@ -41,6 +41,18 @@
             <input id="pat" type="password" @bind="patInput" @bind:event="oninput" autocomplete="off" required />
         </div>
         <button class="connect-button" type="submit" disabled="@busy">Conectar</button>
+        @if (Service.CanPersistConnection)
+        {
+            <label class="connection-remember"><input type="checkbox" @bind="rememberConnection" /><span>Manter conexão neste computador <small>O PAT será guardado no Gerenciador de Credenciais do Windows deste usuário.</small></span></label>
+        }
+        else
+        {
+            <p class="connection-storage-note">Neste sistema, a conexão fica disponível apenas durante a sessão atual.</p>
+        }
+        @if (savedConnectionNeedsRemoval)
+        {
+            <button class="connection-remove" type="button" @onclick="RemoveSavedConnection">Remover credencial salva</button>
+        }
     </form>
 }
 else
@@ -273,6 +285,8 @@ else
     private string referenceText = "";
     private string organizationInput = "";
     private string patInput = "";
+    private bool rememberConnection;
+    private bool savedConnectionNeedsRemoval;
     private Dashboard? dashboard;
     private string? error;
     private string errorTitle = "Não foi possível atualizar.";
@@ -289,6 +303,14 @@ else
     protected override async Task OnInitializedAsync()
     {
         referenceText = Service.Today.AddDays(-1).ToString("yyyy-MM-dd");
+        rememberConnection = Service.CanPersistConnection;
+        var restored = Service.RestoreConnection();
+        if (restored.IsFailure)
+        {
+            savedConnectionNeedsRemoval = true;
+            errorTitle = "Não foi possível recuperar a conexão salva.";
+            error = restored.Error!.Message;
+        }
         organizationInput = Service.Organization;
         if (!Service.HasConnection) return;
         await LoadProjects();
@@ -313,25 +335,36 @@ else
 
     private async Task ConnectAsync()
     {
-        var result = Service.ConfigureConnection(organizationInput, patInput);
+        var result = Service.ConfigureConnection(organizationInput, patInput, rememberConnection);
         patInput = "";
         error = null;
         errorTitle = "Não foi possível conectar.";
         if (result.IsFailure) { error = result.Error!.Message; return; }
+        savedConnectionNeedsRemoval = false;
         await LoadProjects();
+    }
+
+    private void RemoveSavedConnection()
+    {
+        var result = Service.ForgetConnection();
+        errorTitle = "Não foi possível remover a credencial salva.";
+        error = result.IsFailure ? result.Error!.Message : null;
+        savedConnectionNeedsRemoval = result.IsFailure;
     }
 
     private void ChangeConnection()
     {
         organizationInput = Service.Organization;
-        Service.Disconnect();
+        var forgotten = Service.ForgetConnection();
+        savedConnectionNeedsRemoval = forgotten.IsFailure;
         patInput = "";
         projects = [];
         teams = [];
         sprints = [];
         projectId = teamId = sprintId = "";
         dashboard = null;
-        error = null;
+        errorTitle = "Não foi possível esquecer a conexão.";
+        error = forgotten.IsFailure ? forgotten.Error!.Message : null;
         stale = false;
         viewMode = DashboardView.Team;
         selectedPersonId = null;

@@ -15,10 +15,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<RuntimeConnection>();
 builder.Services.AddScoped<IRuntimeConnection>(serviceProvider => serviceProvider.GetRequiredService<RuntimeConnection>());
+builder.Services.AddSingleton<IConnectionStore>(new WindowsCredentialStore());
 builder.Services.AddHttpClient<IDevOpsGateway, AzureDevOpsGateway>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped(serviceProvider => new DashboardService(
     serviceProvider.GetRequiredService<IDevOpsGateway>(),
     serviceProvider.GetRequiredService<IRuntimeConnection>(),
+    serviceProvider.GetRequiredService<IConnectionStore>(),
     serviceProvider.GetRequiredService<TimeProvider>(),
     serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<AzureDevOpsOptions>>().CurrentValue.TimeZoneId));
 builder.Services.AddRazorComponents()

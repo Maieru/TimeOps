@@ -2,12 +2,40 @@ using TimeOps.Domain;
 
 namespace TimeOps.Application;
 
-public sealed class DashboardService(IDevOpsGateway gateway, IRuntimeConnection connection, TimeProvider clock, string timeZoneId)
+public sealed class DashboardService(IDevOpsGateway gateway, IRuntimeConnection connection, IConnectionStore connectionStore, TimeProvider clock, string timeZoneId)
 {
     public bool HasConnection => connection.IsConfigured;
+    public bool CanPersistConnection => connectionStore.IsAvailable;
     public string Organization => connection.Organization;
-    public Result ConfigureConnection(string organization, string personalAccessToken) => connection.Configure(organization, personalAccessToken);
-    public void Disconnect() => connection.Disconnect();
+
+    public Result<bool> RestoreConnection()
+    {
+        if (!connectionStore.IsAvailable) return Result<bool>.Success(false);
+        var saved = connectionStore.Read();
+        if (saved.IsFailure) return Result<bool>.Failure(saved.Error!);
+        if (saved.Value is null) return Result<bool>.Success(false);
+
+        var configured = connection.Configure(saved.Value.Organization, saved.Value.PersonalAccessToken);
+        return configured.IsFailure ? Result<bool>.Failure(configured.Error!) : Result<bool>.Success(true);
+    }
+
+    public Result ConfigureConnection(string organization, string personalAccessToken, bool remember)
+    {
+        var configured = connection.Configure(organization, personalAccessToken);
+        if (configured.IsFailure) return configured;
+
+        var stored = remember
+            ? connectionStore.Save(new SavedConnection(connection.Organization, personalAccessToken.Trim()))
+            : connectionStore.Delete();
+        if (stored.IsFailure) connection.Disconnect();
+        return stored;
+    }
+
+    public Result ForgetConnection()
+    {
+        connection.Disconnect();
+        return connectionStore.Delete();
+    }
 
     public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)).DateTime);
     public DateTimeOffset LocalTime(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(timeZoneId));

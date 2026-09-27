@@ -6,5 +6,10 @@
 .connection-copy p{font-size:12px;color:#637682;line-height:1.45;margin:0;max-width:300px}
 .connect-button{height:42px;border:0;background:#137c77;color:#fff;border-radius:8px;padding:0 20px;font-size:13px;font-weight:700;cursor:pointer}
 .connect-button:hover:not(:disabled){background:#086763}
+.connection-remember{grid-column:1/-1;display:flex;align-items:flex-start;gap:10px;color:var(--ink,#17212e);font-size:13px;cursor:pointer}
+.connection-remember input{margin:2px 0 0;accent-color:var(--blue-deep,#137c77)}
+.connection-remember small{display:block;color:var(--muted,#637682);font-size:12px;line-height:1.45;margin-top:3px}
+.connection-storage-note{grid-column:1/-1;color:var(--muted,#637682);font-size:12px;margin:0}
+.connection-remove{grid-column:1/-1;justify-self:start;border:0;background:transparent;color:var(--blue,#137c77);padding:0;font-size:12px;text-decoration:underline;cursor:pointer}
 @media(max-width:1120px){.connection-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.connection-copy{grid-column:1/-1}.connect-button{justify-self:start}}
 @media(max-width:610px){.connection-panel{grid-template-columns:1fr}.connection-copy{grid-column:auto}.connect-button{width:100%}.header-actions{justify-content:flex-start;margin-top:14px}}

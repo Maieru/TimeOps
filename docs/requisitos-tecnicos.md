@@ -72,7 +72,7 @@ Este documento especifica o aplicativo; esta entrega documental não cria projet
 
 **RT-18.** Usar PAT com permissões mínimas de leitura requeridas pelos endpoints, incluindo leitura de work items e de projetos/equipes. Documentar na implementação os escopos efetivamente necessários e validar a conexão sem solicitar acesso total à organização.
 
-**RT-19.** Permitir informar organização e PAT durante a execução, em formulário local. Manter o PAT somente na memória do servidor para a sessão Blazor corrente; ao trocar a conexão, deixar de utilizá-lo, e exigir nova entrada em uma nova sessão. Não persistir em appsettings, User Secrets, arquivos, URLs, logs, cache de apresentação ou respostas para o navegador. Usar HTTPS nas chamadas ao DevOps.
+**RT-19.** Permitir informar organização e PAT durante a execução, em formulário local. No Windows, oferecer persistência opcional, marcada por padrão, como credencial genérica do Gerenciador de Credenciais, limitada ao usuário do sistema e ao computador local. Recuperar a conexão ao iniciar nova sessão e oferecer ação explícita para apagar a credencial salva e descartar a conexão da sessão corrente. Sem esse cofre, manter o PAT somente na memória da sessão. Não persistir o PAT em appsettings, User Secrets, arquivos próprios, URLs, logs, cache de apresentação ou respostas para o navegador. Usar HTTPS nas chamadas ao DevOps. O piloto localhost não autentica cada visitante; executá-lo apenas em computador local confiável.
 
 **RT-20.** Permitir informar a organização no formulário e configurar o fuso no servidor. Aceitar apenas o nome da organização, sem URL arbitrária; o cliente deverá construir as consultas exclusivamente para `dev.azure.com`.
 
@@ -108,7 +108,7 @@ Este documento especifica o aplicativo; esta entrega documental não cria projet
 | Integração real | Smoke test explícito com organização de teste e PAT informado localmente no aplicativo; validar leitura de equipe/sprint e amostra de totais; nunca depender de segredo versionado |
 | Web | Verificar navegação, idioma, detalhes, links, atualização manual e distinção entre indisponível, zero, incompleto e desatualizado |
 | Arquitetura | Testes automatizados de referências e dependências de tipos impedindo violações de RT-03 a RT-07, incluindo uso de Infrastructure fora da composição em Web |
-| Segurança | Confirmar binding somente em loopback, isolamento entre sessões, descarte do PAT ao trocar conexão e ausência do token em respostas, logs, cache de apresentação e arquivos versionados |
+| Segurança | Confirmar binding somente em loopback, armazenamento no cofre do usuário do Windows, restauração e exclusão da credencial, descarte do PAT da sessão corrente ao trocar conexão e ausência do token em respostas, logs, cache de apresentação e arquivos versionados |
 | Result pattern | Verificar invariantes de sucesso/falha, propagação entre camadas, conversão de falhas de integração, tratamento explícito na Web, cancelamento e ausência de detalhes sensíveis nos erros, conforme RT-32 a RT-35 |
 
 **RT-30.** Os testes de arquitetura deverão falhar se Domain referenciar outro projeto, Application referenciar Infrastructure/Web, camadas internas dependerem dos frameworks proibidos ou componentes Web acessarem implementações externas diretamente.
