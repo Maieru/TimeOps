@@ -112,18 +112,47 @@ else
 
     <section class="summary" aria-label="Resumo da equipe">
         <div class="summary-primary"><p>Horas registradas <MetricInfo Title="Horas registradas" Description="@MetricHelp.Completed" /></p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
-        <div class="summary-item"><p>Esperadas até a referência <MetricInfo Title="Horas esperadas" Description="@MetricHelp.Expected" /></p><strong>@Hours(dashboard.Team.Expected)</strong><span>Capacidade dos dias decorridos</span></div>
-        <div class="summary-item"><p>Diferença <MetricInfo Title="Diferença" Description="@MetricHelp.Difference" /></p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@(dashboard.Team.Coverage is null ? "Cobertura não aplicável" : $"{dashboard.Team.Coverage.Value.ToString("N2", Pt)}% de cobertura") <MetricInfo Title="Cobertura" Description="@MetricHelp.Coverage" /></span></div>
-        <div class="summary-item"><p>Trabalho restante <MetricInfo Title="Trabalho restante" Description="@MetricHelp.Remaining" /></p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@Hours(dashboard.Team.FutureCapacity) de capacidade futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span></div>
+        <div class="summary-item"><p>Esperadas até a referência <MetricInfo Title="Horas esperadas" Description="@MetricHelp.Expected" /></p><strong>@Hours(dashboard.Team.Expected)</strong><span>@(dashboard.Team.Expected is null ? "Capacidade incompleta" : "Capacidade dos dias decorridos")</span></div>
+        <div class="summary-item"><p>Diferença <MetricInfo Title="Diferença" Description="@MetricHelp.Difference" /></p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@CoverageCaption(dashboard.Team) <MetricInfo Title="Cobertura" Description="@MetricHelp.Coverage" /></span></div>
+        <div class="summary-item"><p>Trabalho restante <MetricInfo Title="Trabalho restante" Description="@MetricHelp.Remaining" /></p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@(dashboard.Team.FutureCapacity is null ? "Capacidade futura indisponível" : $"{Hours(dashboard.Team.FutureCapacity)} de capacidade futura") <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span></div>
     </section>
 
     @if (dashboard.Warnings.Count > 0)
     {
-        <section class="notice warning" aria-label="Avisos de dados"><strong>@dashboard.Warnings.Count aviso(s) sobre os dados</strong><ul>@foreach (var warning in dashboard.Warnings) { <li>@warning.Message</li> }</ul></section>
+        <details class="data-quality">
+            <summary>
+                <span class="data-quality-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></span>
+                <span class="data-quality-copy"><strong>@WarningCountLabel(dashboard.Warnings.Count)</strong><span>@(dashboard.Team.Expected is null ? "A capacidade da equipe está incompleta. Confira o que falta." : "Confira campos e Tasks que precisam de atenção.")</span></span>
+                <span class="data-quality-expand"><span class="when-closed">Ver avisos</span><span class="when-open">Recolher</span></span>
+            </summary>
+            <div class="warning-groups">
+                @foreach (var group in dashboard.Warnings.GroupBy(warning => warning.Code))
+                {
+                    <section class="warning-group">
+                        <h3>@WarningLabel(group.Key) <span>@group.Count()</span></h3>
+                        <ul>@foreach (var warning in group) { <li>@warning.Message</li> }</ul>
+                    </section>
+                }
+            </div>
+        </details>
     }
 
     <section class="data-section">
-        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p></div><span class="section-count">@dashboard.People.Count pessoa(s) <MetricInfo Title="Pessoas da equipe" Description="@MetricHelp.PeopleCount" /></span></div>
+        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p><p class="table-hint">Role a tabela na horizontal para ver todas as métricas.</p></div><span class="section-count">@PeopleCountLabel(dashboard.People.Count) <MetricInfo Title="Pessoas da equipe" Description="@MetricHelp.PeopleCount" /></span></div>
+        <details class="mobile-metric-guide">
+            <summary>Como ler as métricas</summary>
+            <div>
+                <span>Completed <MetricInfo Title="Completed por pessoa" Description="@MetricHelp.PersonCompleted" /></span>
+                <span>Esperado <MetricInfo Title="Esperado por pessoa" Description="@MetricHelp.PersonExpected" /></span>
+                <span>Diferença <MetricInfo Title="Diferença por pessoa" Description="@MetricHelp.Difference" /></span>
+                <span>Cobertura <MetricInfo Title="Cobertura por pessoa" Description="@MetricHelp.Coverage" /></span>
+                <span>Estimativa <MetricInfo Title="Estimativa original por pessoa" Description="@MetricHelp.PersonOriginal" /></span>
+                <span>Restante <MetricInfo Title="Trabalho restante por pessoa" Description="@MetricHelp.PersonRemaining" /></span>
+                <span>Cap. total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></span>
+                <span>Cap. futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span>
+                <span>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></span>
+            </div>
+        </details>
         <div class="table-scroll">
             <table>
                 <thead><tr>
@@ -142,13 +171,13 @@ else
                     @foreach (var person in dashboard.People)
                     {
                         <tr>
-                            <th scope="row"><details><summary>@person.Person!.Name <small>@person.Tasks.Count Task(s)</small></summary><TaskList Tasks="person.Tasks" /></details></th>
-                            <td>@Hours(person.Completed)</td><td>@Hours(person.Expected)</td><td class="@VarianceClass(person.Difference)">@SignedHours(person.Difference)</td><td>@Percent(person.Coverage)</td><td>@Hours(person.Original)</td><td>@Hours(person.Remaining)</td><td>@Hours(person.TotalCapacity)</td><td>@Hours(person.FutureCapacity)</td><td class="@VarianceClass(person.FutureBalance)">@SignedHours(person.FutureBalance)</td>
+                            <th scope="row"><details><summary>@person.Person!.Name <small>@TaskCountLabel(person.Tasks.Count)</small></summary><TaskList Tasks="person.Tasks" /></details></th>
+                            <td data-label="Completed">@Hours(person.Completed)</td><td data-label="Esperado">@Hours(person.Expected)</td><td data-label="Diferença" class="@VarianceClass(person.Difference)">@SignedHours(person.Difference)</td><td data-label="Cobertura">@Percent(person.Coverage)</td><td data-label="Estimativa">@Hours(person.Original)</td><td data-label="Restante">@Hours(person.Remaining)</td><td data-label="Cap. total">@Hours(person.TotalCapacity)</td><td data-label="Cap. futura">@Hours(person.FutureCapacity)</td><td data-label="Saldo futuro" class="@VarianceClass(person.FutureBalance)">@SignedHours(person.FutureBalance)</td>
                         </tr>
                     }
                     @if (dashboard.Unassigned is not null)
                     {
-                        <tr class="unassigned"><th scope="row"><details><summary>Sem responsável <small>@dashboard.Unassigned.Tasks.Count Task(s)</small></summary><TaskList Tasks="dashboard.Unassigned.Tasks" /></details></th><td>@Hours(dashboard.Unassigned.Completed)</td><td>—</td><td>—</td><td>—</td><td>@Hours(dashboard.Unassigned.Original)</td><td>@Hours(dashboard.Unassigned.Remaining)</td><td>—</td><td>—</td><td>—</td></tr>
+                        <tr class="unassigned"><th scope="row"><details><summary>Sem responsável <small>@TaskCountLabel(dashboard.Unassigned.Tasks.Count)</small></summary><TaskList Tasks="dashboard.Unassigned.Tasks" /></details></th><td data-label="Completed">@Hours(dashboard.Unassigned.Completed)</td><td data-label="Esperado">—</td><td data-label="Diferença">—</td><td data-label="Cobertura">—</td><td data-label="Estimativa">@Hours(dashboard.Unassigned.Original)</td><td data-label="Restante">@Hours(dashboard.Unassigned.Remaining)</td><td data-label="Cap. total">—</td><td data-label="Cap. futura">—</td><td data-label="Saldo futuro">—</td></tr>
                     }
                     @if (dashboard.People.Count == 0 && dashboard.Unassigned is null)
                     {
@@ -349,7 +378,25 @@ else
     private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
     private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
     private static string Percent(decimal? value) => value is null ? "N/A" : $"{value.Value.ToString("N2", Pt)}%";
+    private static string WarningCountLabel(int count) => $"{count} {(count == 1 ? "aviso" : "avisos")} sobre os dados";
+    private static string PeopleCountLabel(int count) => $"{count} {(count == 1 ? "pessoa" : "pessoas")}";
+    private static string TaskCountLabel(int count) => $"{count} {(count == 1 ? "Task" : "Tasks")}";
+    private static string CoverageCaption(TeamMetrics team) => team.Coverage is not null
+        ? $"{team.Coverage.Value.ToString("N2", Pt)}% de cobertura"
+        : team.Expected == 0 && team.Completed is not null ? "Cobertura não aplicável" : "Cobertura indisponível";
     private static string VarianceClass(decimal? value) => value is null ? "" : value < 0 ? "negative" : value > 0 ? "positive" : "";
+    private static string WarningLabel(string code) => code switch
+    {
+        "capacity.missing" => "Capacidade ausente",
+        "completed.empty" => "Completed vazio",
+        "original.empty" => "Estimativa original vazia",
+        "remaining.empty" => "Trabalho restante vazio",
+        "completed.remaining" => "Tasks concluídas com trabalho restante",
+        "field.completed.missing" => "Completed indisponível",
+        "field.original.missing" => "Estimativa original indisponível",
+        "field.remaining.missing" => "Trabalho restante indisponível",
+        _ => "Outros avisos"
+    };
     private static string CategoryLabel(string category) => category switch
     {
         "Proposed" => "Propostas", "InProgress" => "Em andamento", "Resolved" => "Resolvidas",

@@ -1,0 +1,444 @@
+/* Refinements for the sprint dashboard. The shared colors and shell remain in app.css. */
+.context-line {
+    margin: 28px 0 15px;
+    gap: 11px;
+    line-height: 1.5;
+}
+
+.summary > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.summary p,
+.summary > div > span {
+    margin: 0;
+}
+
+.summary strong {
+    margin: auto 0;
+}
+
+.summary .metric-info,
+.secondary-stats .metric-info {
+    vertical-align: middle;
+}
+
+.metric-info-trigger {
+    width: 26px;
+    height: 26px;
+}
+
+.data-quality {
+    margin-top: 20px;
+    border: 1px solid #eadcc3;
+    border-radius: 12px;
+    background: #fff8ec;
+    color: #68461b;
+}
+
+.data-quality > summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 18px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.data-quality > summary::-webkit-details-marker,
+.data-quality > summary::before {
+    display: none;
+}
+
+.data-quality > summary:hover {
+    background: #fff3dd;
+}
+
+.data-quality-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 9px;
+    background: #f6e5c6;
+    color: #845716;
+}
+
+.data-quality-icon svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+}
+
+.data-quality-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.data-quality-copy strong {
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.data-quality-copy > span {
+    color: #765b36;
+}
+
+.data-quality-expand {
+    margin-left: auto;
+    flex: none;
+    color: #6d4b1b;
+    font-size: 12px;
+    font-weight: 750;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.data-quality .when-open,
+.data-quality[open] .when-closed {
+    display: none;
+}
+
+.data-quality[open] .when-open {
+    display: inline;
+}
+
+.warning-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 30px;
+    padding: 3px 18px 16px 66px;
+}
+
+.warning-group {
+    min-width: 0;
+    padding: 14px 0 2px;
+    border-top: 1px solid #eadcc3;
+    break-inside: avoid;
+}
+
+.warning-group h3 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.warning-group h3 span {
+    font-weight: 500;
+    color: #806744;
+}
+
+.warning-group ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.warning-group li + li {
+    margin-top: 5px;
+}
+
+.data-section {
+    margin-top: 32px;
+}
+
+.section-header .table-hint {
+    margin-top: 5px;
+    color: #6d7f88;
+    font-size: 11px;
+}
+
+.table-scroll {
+    scrollbar-color: #9fb5bb #f4f7f8;
+    scrollbar-width: thin;
+}
+
+.table-scroll table {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 1260px;
+}
+
+.table-scroll thead th:first-child,
+.table-scroll tbody th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 230px;
+    max-width: 285px;
+    background: #fff;
+    box-shadow: 1px 0 0 #e8eef0;
+}
+
+.table-scroll thead th:first-child {
+    z-index: 2;
+    background: #f9fbfc;
+}
+
+.table-scroll tbody tr:hover th:first-child {
+    background: #fcfdfd;
+}
+
+.table-scroll tbody tr.unassigned th:first-child {
+    background: #fffaf2;
+}
+
+.table-scroll th,
+.table-scroll td {
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+.table-scroll tbody th summary {
+    white-space: normal;
+    line-height: 1.35;
+}
+
+.mobile-metric-guide {
+    display: none;
+}
+
+.secondary-stats {
+    margin-top: 27px;
+}
+
+@media (max-width: 900px) {
+    .warning-groups {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .context-line {
+        margin-top: 22px;
+    }
+
+    .section-header .table-hint {
+        display: none;
+    }
+
+    .summary > div {
+        gap: 10px;
+    }
+
+    .summary strong {
+        margin: 2px 0;
+    }
+
+    .data-quality > summary {
+        align-items: flex-start;
+        padding: 14px;
+    }
+
+    .data-quality-expand {
+        align-self: center;
+    }
+
+    .warning-groups {
+        padding: 2px 15px 16px;
+    }
+
+    .mobile-metric-guide {
+        display: block;
+        margin-bottom: 12px;
+        border: 1px solid #dde6e9;
+        border-radius: 10px;
+        background: #fff;
+        color: #3c5663;
+        font-size: 12px;
+    }
+
+    .mobile-metric-guide > summary {
+        padding: 12px 15px 12px 32px;
+        font-weight: 700;
+    }
+
+    .mobile-metric-guide > summary::before {
+        left: 15px;
+        top: 17px;
+    }
+
+    .mobile-metric-guide > div {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px 10px;
+        padding: 0 14px 14px;
+    }
+
+    .mobile-metric-guide > div > span {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 0;
+        padding: 6px 0;
+        border-top: 1px solid #edf1f2;
+    }
+
+    .table-scroll {
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .table-scroll table,
+    .table-scroll tbody {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .table-scroll thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .table-scroll tbody {
+        display: grid;
+        gap: 12px;
+    }
+
+    .table-scroll tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: hidden;
+        border: 1px solid #dfe8eb;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .table-scroll tbody tr.unassigned {
+        background: #fffaf2;
+    }
+
+    .table-scroll tbody th:first-child {
+        position: static;
+        grid-column: 1 / -1;
+        min-width: 0;
+        max-width: none;
+        padding: 14px 16px;
+        background: transparent;
+        box-shadow: none;
+        text-align: left;
+    }
+
+    .table-scroll tbody tr:hover th:first-child,
+    .table-scroll tbody tr.unassigned th:first-child {
+        background: transparent;
+    }
+
+    .table-scroll tbody td {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+        padding: 12px 16px;
+        border-bottom: 1px solid #edf1f2;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.25;
+        text-align: left;
+        white-space: normal;
+    }
+
+    .table-scroll tbody td::before {
+        content: attr(data-label);
+        color: #617581;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .table-scroll tbody td:last-child {
+        grid-column: 1 / -1;
+        border-bottom: 0;
+    }
+
+    .table-scroll tbody tr:hover {
+        background: #fff;
+    }
+
+    .table-scroll tbody tr.unassigned:hover {
+        background: #fffaf2;
+    }
+
+    .table-scroll .task-list {
+        min-width: 0;
+        max-width: none;
+    }
+
+    .table-scroll .no-data {
+        grid-column: 1 / -1;
+        padding: 22px;
+        font-weight: 400;
+    }
+}
+
+@media (max-width: 460px) {
+    .data-quality > summary {
+        flex-wrap: wrap;
+    }
+
+    .data-quality-copy {
+        flex: 1;
+    }
+
+    .data-quality-expand {
+        width: 100%;
+        margin-left: 48px;
+    }
+
+    .section-header {
+        align-items: flex-start;
+    }
+}
+
+@media (min-width: 371px) and (max-width: 460px) {
+    .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .summary > div {
+        min-height: 160px;
+        padding: 17px 14px;
+    }
+
+    .summary > div + div {
+        border-top: 0;
+    }
+
+    .summary > div:nth-child(even) {
+        border-left: 1px solid #e8eef0;
+    }
+
+    .summary > div:nth-child(n + 3) {
+        border-top: 1px solid #e8eef0;
+    }
+
+    .summary p,
+    .summary > div > span {
+        font-size: 11px;
+    }
+
+    .summary strong {
+        font-size: clamp(17px, 4.8vw, 22px);
+    }
+}
