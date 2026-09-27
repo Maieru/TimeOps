@@ -1,15 +1,46 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject DashboardNavigationState Navigation
+@inject NavigationManager Router
 
 <div class="shell">
     <aside class="sidebar">
         <a class="brand" href="/" aria-label="TimeOps, início"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
-        <div class="sidebar-content">
-            <p class="sidebar-heading">Workspace</p>
-            <a class="nav-current" href="/"><span class="nav-dot"></span> Visão da sprint</a>
+        <nav class="sidebar-nav" aria-label="Visões da sprint">
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.Team ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Team ? "true" : "false")" @onclick="() => SelectView(DashboardView.Team)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19v-1.2A4.8 4.8 0 0 1 7.3 13h1.4a4.8 4.8 0 0 1 4.8 4.8V19H2.5Zm11 0v-1.2c0-1.1-.3-2.2-.9-3.1.8-1.1 2.1-1.7 3.4-1.7h.7a4.8 4.8 0 0 1 4.8 4.8V19h-8Z"/></svg>
+                <span>Equipe</span>
+            </button>
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.Person ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Person ? "true" : "false")" @onclick="() => SelectView(DashboardView.Person)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3.5"/><path d="M4.5 20v-1.4a7.5 7.5 0 0 1 15 0V20h-15Z"/></svg>
+                <span>Pessoa</span>
+            </button>
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.History ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.History ? "true" : "false")" @onclick="() => SelectView(DashboardView.History)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.4 2"/></svg>
+                <span>Histórico 24 h</span>
+            </button>
+        </nav>
+        <div class="sidebar-context" aria-label="Contexto selecionado">
+            <span>Contexto atual</span>
+            <strong>@(Navigation.SprintName ?? "Escolha uma sprint")</strong>
+            <small>@(Navigation.TeamName is null ? "Use os filtros do painel" : $"{Navigation.ProjectName} / {Navigation.TeamName}")</small>
         </div>
-        <div class="sidebar-foot"><span class="status-pulse"></span><span>Fonte: Azure DevOps</span></div>
+        <div class="sidebar-foot"><span>Fonte de dados</span><strong>Azure DevOps</strong><small>Consulta somente de leitura</small></div>
     </aside>
     <main class="main-content">@Body</main>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="/">Recarregar</a></div>
+
+@code {
+    protected override void OnInitialized() => Navigation.Changed += Refresh;
+
+    private void SelectView(DashboardView view)
+    {
+        Navigation.Select(view);
+        if (new Uri(Router.Uri).AbsolutePath != "/") Router.NavigateTo("/");
+    }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Navigation.Changed -= Refresh;
+}

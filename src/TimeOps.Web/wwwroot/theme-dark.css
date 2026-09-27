@@ -128,11 +128,7 @@ button:disabled, .field select:disabled, .field input:disabled { opacity: .55; }
 .metric-info-popover strong, .summary .metric-info-popover strong, .secondary-stats .metric-info-popover strong { color: var(--ink); }
 .metric-info-popover span, .summary .metric-info-popover span, .secondary-stats .metric-info-popover span { color: #c4d5e8; }
 
-/* View switch and personal metrics */
-.view-switch { background: #101e30; border-color: var(--line); }
-.view-switch button { color: #b8cae0; }
-.view-switch button:hover:not(.active) { background: #1c304a; color: #f0f6ff; }
-.view-switch button.active { background: #285b9b; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .24); }
+/* Personal metrics */
 .person-empty { background: var(--surface); border-color: var(--line); color: var(--muted); }
 .person-overview { background: var(--surface); border-color: var(--line); }
 .person-gauge-panel { background: #152941; }

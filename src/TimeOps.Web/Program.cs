@@ -13,6 +13,7 @@ builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
 builder.Services.Configure<AzureDevOpsOptions>(builder.Configuration.GetSection("AzureDevOps"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddMemoryCache();
+builder.Services.AddScoped<DashboardNavigationState>();
 builder.Services.AddScoped<RuntimeConnection>();
 builder.Services.AddScoped<IRuntimeConnection>(serviceProvider => serviceProvider.GetRequiredService<RuntimeConnection>());
 builder.Services.AddSingleton<IConnectionStore>(new WindowsCredentialStore());

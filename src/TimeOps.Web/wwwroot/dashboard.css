@@ -444,32 +444,6 @@
 }
 
 /* A personal lens over the same sprint snapshot. */
-.view-switch {
-    display: inline-flex;
-    gap: 4px;
-    margin: 0 0 20px;
-    padding: 4px;
-    border: 1px solid #d9e4e7;
-    border-radius: 10px;
-    background: #eaf0f2;
-}
-
-.view-switch button {
-    min-width: 100px;
-    min-height: 38px;
-    padding: 7px 17px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: #526a76;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.view-switch button:hover:not(.active) { background: #f6f9fa; color: #213d49; }
-.view-switch button.active { background: #fff; color: #126e69; box-shadow: 0 2px 6px rgba(22, 47, 60, .1); }
-
 .person-toolbar {
     display: flex;
     justify-content: space-between;

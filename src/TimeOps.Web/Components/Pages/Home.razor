@@ -1,17 +1,18 @@
 @page "/"
-@rendermode InteractiveServer
+@implements IDisposable
 @using System.Globalization
 @using TimeOps.Application
 @using TimeOps.Domain
 @inject DashboardService Service
 @inject ILogger<Home> Logger
+@inject DashboardNavigationState Navigation
 
-<PageTitle>Visão da sprint · TimeOps</PageTitle>
+<PageTitle>@ViewTitle · TimeOps</PageTitle>
 
 <header class="page-header">
     <div>
-        <h1>Visão da sprint</h1>
-        <p>Capacidade e horas registradas, diretamente do Azure DevOps.</p>
+        <h1>@ViewTitle</h1>
+        <p>@ViewSubtitle</p>
     </div>
     @if (Service.HasConnection)
     {
@@ -121,12 +122,6 @@ else
         }
         <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
     </div>
-
-    <nav class="view-switch" aria-label="Visualização do painel">
-        <button type="button" class="@(viewMode == DashboardView.Team ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Team)" @onclick="() => viewMode = DashboardView.Team">Equipe</button>
-        <button type="button" class="@(viewMode == DashboardView.Person ? "active" : "")" aria-pressed="@(viewMode == DashboardView.Person)" @onclick="() => viewMode = DashboardView.Person">Pessoa</button>
-        <button type="button" class="@(viewMode == DashboardView.History ? "active" : "")" aria-pressed="@(viewMode == DashboardView.History)" @onclick="ShowHistory" disabled="@busy">Histórico 24 h</button>
-    </nav>
 
     @if (viewMode == DashboardView.Team)
     {
@@ -331,18 +326,37 @@ else
     private string errorTitle = "Não foi possível atualizar.";
     private bool busy;
     private bool stale;
-    private DashboardView viewMode = DashboardView.Team;
+    private bool historyLoadPending;
+    private DashboardView viewMode => Navigation.Current;
+    private string ViewTitle => viewMode switch
+    {
+        DashboardView.Person => "Pessoa",
+        DashboardView.History => "Histórico 24 h",
+        _ => "Equipe"
+    };
+    private string ViewSubtitle => viewMode switch
+    {
+        DashboardView.Person => "Capacidade, horas e Tasks de cada integrante da sprint.",
+        DashboardView.History => "Alterações recentes nas horas das Tasks desta sprint.",
+        _ => "Capacidade e horas registradas, diretamente do Azure DevOps."
+    };
     private string? selectedPersonId;
     private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
         ?? dashboard?.People.FirstOrDefault();
-    private enum DashboardView { Team, Person, History }
-
     private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
 
-    private async Task ShowHistory()
+    private void OnViewChanged(DashboardView view)
     {
-        viewMode = DashboardView.History;
-        if (history is null) await LoadHistory();
+        _ = InvokeAsync(async () =>
+        {
+            if (view == DashboardView.History && dashboard is not null && history is null)
+            {
+                if (busy) historyLoadPending = true;
+                else await LoadHistory();
+            }
+            else if (view != DashboardView.History) historyLoadPending = false;
+            StateHasChanged();
+        });
     }
 
     private async Task LoadHistory()
@@ -369,11 +383,13 @@ else
             errorTitle = "Não foi possível carregar o histórico.";
             error = "Ocorreu um erro inesperado. Tente atualizar novamente.";
         }
-        finally { busy = false; }
+        finally { busy = false; historyLoadPending = false; }
     }
 
     protected override async Task OnInitializedAsync()
     {
+        Navigation.ViewChanged += OnViewChanged;
+        UpdateNavigationContext();
         referenceText = Service.Today.AddDays(-1).ToString("yyyy-MM-dd");
         rememberConnection = Service.CanPersistConnection;
         var restored = Service.RestoreConnection();
@@ -436,10 +452,12 @@ else
         projectId = teamId = sprintId = "";
         dashboard = null;
         history = null;
+        historyLoadPending = false;
         errorTitle = "Não foi possível esquecer a conexão.";
         error = forgotten.IsFailure ? forgotten.Error!.Message : null;
         stale = false;
-        viewMode = DashboardView.Team;
+        Navigation.Select(DashboardView.Team);
+        UpdateNavigationContext();
         selectedPersonId = null;
     }
 
@@ -453,6 +471,7 @@ else
         history = null;
         stale = false;
         error = null;
+        UpdateNavigationContext();
         if (projectId.Length == 0) return;
         busy = true;
         try
@@ -474,6 +493,7 @@ else
         history = null;
         stale = false;
         error = null;
+        UpdateNavigationContext();
         if (teamId.Length == 0) return;
         busy = true;
         try
@@ -485,7 +505,7 @@ else
                 sprints = result.Value;
                 var today = Service.Today;
                 var current = sprints.Where(sprint => sprint.Start <= today && sprint.End >= today).ToArray();
-                if (current.Length == 1) { sprintId = current[0].Id; await Load(false); }
+                if (current.Length == 1) { sprintId = current[0].Id; UpdateNavigationContext(); await Load(false); }
             }
         }
         catch (Exception) { error = "Não foi possível carregar as sprints. Tente novamente."; }
@@ -499,6 +519,7 @@ else
         history = null;
         stale = false;
         error = null;
+        UpdateNavigationContext();
         if (sprintId.Length > 0) await Load(false);
     }
 
@@ -509,6 +530,13 @@ else
     }
 
     private Task Refresh() => Load(true);
+
+    private void UpdateNavigationContext() => Navigation.SetContext(
+        projects.FirstOrDefault(item => item.Id == projectId)?.Name,
+        teams.FirstOrDefault(item => item.Id == teamId)?.Name,
+        sprints.FirstOrDefault(item => item.Id == sprintId)?.Name);
+
+    public void Dispose() => Navigation.ViewChanged -= OnViewChanged;
 
     private async Task Load(bool force)
     {
@@ -529,11 +557,24 @@ else
                 stale = false;
                 if (!dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
                     selectedPersonId = dashboard.People.FirstOrDefault()?.Person?.Id;
-                if (viewMode == DashboardView.History) await LoadHistory();
+                if (viewMode == DashboardView.History)
+                {
+                    historyLoadPending = false;
+                    await LoadHistory();
+                }
             }
         }
         catch (Exception) { error = "Ocorreu um erro inesperado. Tente atualizar novamente."; stale = dashboard is not null; }
-        finally { busy = false; }
+        finally
+        {
+            busy = false;
+            if (historyLoadPending)
+            {
+                historyLoadPending = false;
+                if (viewMode == DashboardView.History && dashboard is not null && history is null)
+                    await LoadHistory();
+            }
+        }
     }
 
     private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";

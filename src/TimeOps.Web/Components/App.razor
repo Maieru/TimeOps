@@ -13,12 +13,13 @@
     <link rel="stylesheet" href="@Assets["history.css"]" />
     <link rel="stylesheet" href="@Assets["TimeOps.Web.styles.css"]" />
     <link rel="stylesheet" href="@Assets["theme-dark.css"]" />
+    <link rel="stylesheet" href="@Assets["navigation.css"]" />
     <ImportMap />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
-    <Routes />
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
