@@ -187,13 +187,21 @@ else
                     @foreach (var person in dashboard.People)
                     {
                         <tr>
-                            <th scope="row"><details><summary>@person.Person!.Name <small>@TaskCountLabel(person.Tasks.Count)</small></summary><TaskList Tasks="person.Tasks" /></details></th>
+                            <th scope="row"><button class="person-toggle" type="button" aria-expanded="@(expandedPeople.Contains(person.Person!.Id) ? "true" : "false")" @onclick="() => TogglePerson(person.Person.Id)"><span>@person.Person.Name</span><small>@TaskCountLabel(person.Tasks.Count)</small></button></th>
                             <td data-label="Completed">@Hours(person.Completed)</td><td data-label="Esperado">@Hours(person.Expected)</td><td data-label="Diferença" class="@VarianceClass(person.Difference)">@SignedHours(person.Difference)</td><td data-label="Cobertura">@Percent(person.Coverage)</td><td data-label="Estimativa">@Hours(person.Original)</td><td data-label="Restante">@Hours(person.Remaining)</td><td data-label="Cap. total">@Hours(person.TotalCapacity)</td><td data-label="Cap. futura">@Hours(person.FutureCapacity)</td><td data-label="Saldo futuro" class="@VarianceClass(person.FutureBalance)">@SignedHours(person.FutureBalance)</td>
                         </tr>
+                        @if (expandedPeople.Contains(person.Person.Id))
+                        {
+                            <tr class="team-task-details"><td colspan="10"><div class="team-task-heading">Tasks de @person.Person.Name</div><TaskList Tasks="person.Tasks" /></td></tr>
+                        }
                     }
                     @if (dashboard.Unassigned is not null)
                     {
-                        <tr class="unassigned"><th scope="row"><details><summary>Sem responsável <small>@TaskCountLabel(dashboard.Unassigned.Tasks.Count)</small></summary><TaskList Tasks="dashboard.Unassigned.Tasks" /></details></th><td data-label="Completed">@Hours(dashboard.Unassigned.Completed)</td><td data-label="Esperado">—</td><td data-label="Diferença">—</td><td data-label="Cobertura">—</td><td data-label="Estimativa">@Hours(dashboard.Unassigned.Original)</td><td data-label="Restante">@Hours(dashboard.Unassigned.Remaining)</td><td data-label="Cap. total">—</td><td data-label="Cap. futura">—</td><td data-label="Saldo futuro">—</td></tr>
+                        <tr class="unassigned"><th scope="row"><button class="person-toggle" type="button" aria-expanded="@(unassignedExpanded ? "true" : "false")" @onclick="ToggleUnassigned"><span>Sem responsável</span><small>@TaskCountLabel(dashboard.Unassigned.Tasks.Count)</small></button></th><td data-label="Completed">@Hours(dashboard.Unassigned.Completed)</td><td data-label="Esperado">—</td><td data-label="Diferença">—</td><td data-label="Cobertura">—</td><td data-label="Estimativa">@Hours(dashboard.Unassigned.Original)</td><td data-label="Restante">@Hours(dashboard.Unassigned.Remaining)</td><td data-label="Cap. total">—</td><td data-label="Cap. futura">—</td><td data-label="Saldo futuro">—</td></tr>
+                        @if (unassignedExpanded)
+                        {
+                            <tr class="team-task-details"><td colspan="10"><div class="team-task-heading">Tasks sem responsável</div><TaskList Tasks="dashboard.Unassigned.Tasks" /></td></tr>
+                        }
                     }
                     @if (dashboard.People.Count == 0 && dashboard.Unassigned is null)
                     {
@@ -358,9 +366,16 @@ else
         _ => "Capacidade e horas registradas, diretamente do Azure DevOps."
     };
     private string? selectedPersonId;
+    private readonly HashSet<string> expandedPeople = new(StringComparer.OrdinalIgnoreCase);
+    private bool unassignedExpanded;
     private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
         ?? dashboard?.People.FirstOrDefault();
     private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
+    private void TogglePerson(string id)
+    {
+        if (!expandedPeople.Add(id)) expandedPeople.Remove(id);
+    }
+    private void ToggleUnassigned() => unassignedExpanded = !unassignedExpanded;
 
     private void OnViewChanged(DashboardView view)
     {
@@ -578,6 +593,8 @@ else
             else
             {
                 dashboard = result.Value;
+                expandedPeople.Clear();
+                unassignedExpanded = false;
                 history = null;
                 stale = false;
                 if (!dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))

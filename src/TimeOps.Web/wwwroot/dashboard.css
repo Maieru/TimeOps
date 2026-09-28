@@ -204,9 +204,60 @@
     padding-bottom: 15px;
 }
 
-.table-scroll tbody th summary {
-    white-space: normal;
+.table-scroll tbody th .person-toggle {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0 0 0 22px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+}
+
+.person-toggle::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: 7px;
+    border-left: 6px solid var(--quiet, #708893);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+}
+
+.person-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.person-toggle small { display: block; margin-top: 5px; color: var(--quiet, #708893); font-size: 11px; font-weight: 400; }
+.person-toggle:hover span { color: var(--blue, #116b68); }
+.person-toggle:focus-visible { outline: 2px solid var(--blue, #116b68); outline-offset: 4px; border-radius: 2px; }
+
+.table-scroll tbody tr.team-task-details > td {
+    padding: 16px 24px 20px;
+    background: var(--surface-deep, #f4f9f8);
+    text-align: left;
+    white-space: normal;
+}
+
+.team-task-heading {
+    margin-bottom: 8px;
+    color: var(--muted, #526b77);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.table-scroll .team-task-details .task-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px;
+    width: 100%;
+    max-width: 1100px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
 }
 
 .mobile-metric-guide {
@@ -330,6 +381,10 @@
         background: #fffaf2;
     }
 
+    .table-scroll tbody tr.team-task-details {
+        display: block;
+    }
+
     .table-scroll tbody th:first-child {
         position: static;
         grid-column: 1 / -1;
@@ -372,6 +427,14 @@
         border-bottom: 0;
     }
 
+    .table-scroll tbody tr.team-task-details > td {
+        display: block;
+        width: 100%;
+        padding: 13px 16px 16px;
+    }
+
+    .table-scroll tbody tr.team-task-details > td::before { display: none; }
+
     .table-scroll tbody tr:hover {
         background: #fff;
     }
@@ -384,6 +447,8 @@
         min-width: 0;
         max-width: none;
     }
+
+    .table-scroll .team-task-details .task-list { grid-template-columns: 1fr; }
 
     .table-scroll .no-data {
         grid-column: 1 / -1;
