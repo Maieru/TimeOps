@@ -44,11 +44,11 @@
         <button class="connect-button" type="submit" disabled="@busy">Conectar</button>
         @if (Service.CanPersistConnection)
         {
-            <label class="connection-remember"><input type="checkbox" @bind="rememberConnection" /><span>Manter conexão neste computador <small>O PAT será guardado no Gerenciador de Credenciais do Windows deste usuário.</small></span></label>
+            <label class="connection-remember"><input type="checkbox" @bind="rememberConnection" /><span>Manter conexão neste navegador <small>O PAT será salvo neste perfil do navegador. Use apenas em um perfil confiável.</small></span></label>
         }
         else
         {
-            <p class="connection-storage-note">Neste sistema, a conexão fica disponível apenas durante a sessão atual.</p>
+            <p class="connection-storage-note">O armazenamento está indisponível. A conexão fica apenas nesta aba até recarregar.</p>
         }
         @if (savedConnectionNeedsRemoval)
         {

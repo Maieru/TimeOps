@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Líderes e integrantes da equipe são os usuários previstos e consultam a mesma visão da sprint. No piloto, uma pessoa executa o aplicativo localmente; acesso simultâneo da equipe fica para uma etapa posterior.
+Líderes e integrantes da equipe são os usuários previstos e consultam a mesma visão da sprint. Cada pessoa executa o aplicativo no próprio navegador e fornece seu PAT de leitura.
 
 ## Product Purpose
 
@@ -20,14 +20,14 @@ O painel combina a capacidade diária, o calendário e as folgas cadastrados no 
 
 ## Operating Context
 
-O usuário abre o aplicativo em localhost, informa a organização e um PAT de leitura durante a execução, seleciona projeto, equipe e sprint e consulta o painel. A sprint atual é selecionada automaticamente quando há uma única correspondência. A referência de capacidade é ontem por padrão e pode ser alterada até hoje. O usuário pode atualizar os dados manualmente e abrir as Tasks para conferir seus campos e links no DevOps.
+O usuário abre o aplicativo em um host estático ou em localhost, informa a organização e um PAT de leitura durante a execução, seleciona projeto, equipe e sprint e consulta o painel. A sprint atual é selecionada automaticamente quando há uma única correspondência. A referência de capacidade é ontem por padrão e pode ser alterada até hoje. O usuário pode atualizar os dados manualmente e abrir as Tasks para conferir seus campos e links no DevOps.
 
 O resultado é um retrato dos work items no momento da consulta. A data de referência altera a capacidade calculada, mas não reconstrói os valores históricos de `Completed Work` nem distribui horas entre responsáveis anteriores.
 
 ## Capabilities and Constraints
 
 - O Azure DevOps Services é a fonte de verdade para Tasks, áreas, iteração, identidades, calendário, capacidade e folgas. O TimeOps consulta esses dados sem alterá-los.
-- O piloto funciona em uma aplicação Web C#/.NET 10 com Blazor interativo no servidor, restrita a localhost, sem banco de dados e sem login próprio. O PAT permanece somente na memória da sessão do servidor.
+- O aplicativo usa C#/.NET 10 e Blazor WebAssembly standalone, sem banco de dados e sem login próprio. O PAT fica na memória da aba e, opcionalmente, no localStorage do perfil do navegador. As consultas diretas ao DevOps dependem de CORS.
 - A arquitetura segue Clean Architecture em quatro projetos e usa Result pattern em todas as camadas.
 - Os cálculos usam horas decimais. A capacidade esperada soma atividades por dia elegível e desconta folgas; não assume oito horas quando a capacidade está ausente.
 - `Completed Work`, `Original Estimate` e `Remaining Work` são métricas distintas. Campos vazios contribuem com zero e geram aviso; campos indisponíveis e consultas incompletas não devem parecer totais válidos.

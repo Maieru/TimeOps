@@ -28,6 +28,14 @@ public sealed class AzureDevOpsGatewayTests
         Assert.Contains(handler.Requests, request => request.Contains("workitemsbatch"));
         Assert.Contains(handler.Requests, request => request.Contains("wiql"));
 
+        using var wiql = System.Text.Json.JsonDocument.Parse(handler.Bodies["wiql"]);
+        Assert.Contains("SELECT [System.Id]", wiql.RootElement.GetProperty("query").GetString());
+        using var batch = System.Text.Json.JsonDocument.Parse(handler.Bodies["workitemsbatch"]);
+        Assert.Equal(5, Assert.Single(batch.RootElement.GetProperty("ids").EnumerateArray()).GetInt32());
+        Assert.Equal("Fail", batch.RootElement.GetProperty("errorPolicy").GetString());
+        Assert.Contains(batch.RootElement.GetProperty("fields").EnumerateArray(),
+            field => field.GetString() == "Microsoft.VSTS.Scheduling.CompletedWork");
+
         var metrics = MetricsCalculator.Calculate(result.Value, new(2026, 9, 25), new(2026, 9, 27));
         Assert.Equal(64, metrics.Value.People.Single().Completed);
         Assert.Equal(64, metrics.Value.People.Single().Expected);
@@ -130,19 +138,22 @@ public sealed class AzureDevOpsGatewayTests
         public bool EmptyBatch { get; init; }
         public bool PagedTeams { get; init; }
         public List<string> Requests { get; } = [];
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public Dictionary<string, string> Bodies { get; } = [];
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(request.RequestUri!.ToString());
             Assert.Equal("Basic", request.Headers.Authorization!.Scheme);
             Assert.Equal(":test-pat", Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers.Authorization.Parameter!)));
             var path = request.RequestUri.AbsolutePath;
+            if (request.Content is not null)
+                Bodies[path.Split('/')[^1]] = await request.Content.ReadAsStringAsync(cancellationToken);
             if (PagedTeams && path.EndsWith("/teams", StringComparison.Ordinal))
             {
                 var skipped = request.RequestUri.Query.Contains("$skip=100", StringComparison.Ordinal);
                 var names = skipped ? new[] { new { id = "100", name = "Equipe 100" } }
                     : Enumerable.Range(0, 100).Select(number => new { id = number.ToString(), name = "Equipe " + number }).ToArray();
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                { Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { value = names }), Encoding.UTF8, "application/json") });
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { value = names }), Encoding.UTF8, "application/json") };
             }
             string json = path switch
             {
@@ -156,7 +167,7 @@ public sealed class AzureDevOpsGatewayTests
                 var p when p.EndsWith("/workitemsbatch", StringComparison.Ordinal) => EmptyBatch ? """{"value":[]}""" : """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}""",
                 _ => throw new InvalidOperationException("Rota inesperada: " + path)
             };
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         }
     }
 }

@@ -4,7 +4,7 @@ using TimeOps.Domain;
 
 namespace TimeOps.Infrastructure;
 
-// Scoped: in Interactive Server this instance belongs to one Blazor circuit.
+// In standalone WebAssembly this instance lives in one browser tab.
 public sealed class RuntimeConnection(IOptions<AzureDevOpsOptions> options) : IRuntimeConnection
 {
     private string _organization = options.Value.Organization.Trim();

@@ -22,11 +22,11 @@ O aplicativo e os testes estão implementados; os documentos registram as regras
 | Fonte de verdade | Azure DevOps Services, com integração somente de leitura |
 | Abrangência | Uma organização; seleção de projeto, equipe e sprint; uma equipe por consulta |
 | Público | Ferramenta destinada à equipe interna, com piloto usado localmente por uma pessoa |
-| Acesso inicial | Localhost; organização e PAT informados no aplicativo; persistência opcional no Gerenciador de Credenciais do Windows por usuário, sem login próprio no piloto |
-| Plataforma | C#, .NET 10 LTS e Blazor Web App interativo no servidor |
+| Acesso inicial | Navegador; organização e PAT individuais; persistência opcional em localStorage do perfil, sem login próprio |
+| Plataforma | C#, .NET 10 e Blazor WebAssembly standalone |
 | Arquitetura | Clean Architecture obrigatória, com quatro projetos e dependências verificadas |
 | Result pattern | Obrigatório em todas as camadas para representar sucesso e falhas esperadas das operações |
-| Persistência | Sem banco de dados; credencial opcional no cofre do Windows e cache de métricas temporário em memória |
+| Persistência | Sem banco de dados; credencial opcional no navegador e cache de métricas em memória da aba |
 | Data de referência | Ontem por padrão; seleção de outra data até hoje |
 | Calendário e capacidade | Exclusivamente os dados cadastrados no DevOps |
 | Atribuição de horas | Retrato atual das Tasks, sem reconstrução histórica |
@@ -54,7 +54,7 @@ O aplicativo e os testes estão implementados; os documentos registram as regras
 | Remaining Work | Campo Microsoft.VSTS.Scheduling.RemainingWork, trabalho restante |
 | Cobertura | Razão entre horas registradas e horas esperadas |
 | Retrato atual | Dados presentes no DevOps no momento da coleta, sem reconstrução do passado |
-| PAT | Personal Access Token utilizado pelo servidor para autenticar consultas |
+| PAT | Personal Access Token utilizado pelo navegador para autenticar consultas ao DevOps |
 
 ## Evoluções fora do piloto
 
@@ -71,5 +71,5 @@ Acesso simultâneo da equipe, login corporativo, consolidação entre equipes, s
 - [REST API: folgas da equipe](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/teamdaysoff/get?view=azure-devops-rest-7.1)
 - [Autenticação com PAT](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops)
 - [REST API: atualizações de work items](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/updates/list?view=azure-devops-rest-7.1)
-- [Gerenciamento seguro de credenciais no Windows](https://learn.microsoft.com/en-us/windows/win32/secbp/handling-passwords)
+- [Hospedagem de Blazor WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/blazor/host-and-deploy/webassembly/?view=aspnetcore-10.0)
 - [Autenticação com Microsoft Entra ID, para evolução futura](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/entra?view=azure-devops)

@@ -34,7 +34,7 @@ public sealed partial class AzureDevOpsGateway
         var cutoff = from.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture);
         var query = $"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Task' AND [System.IterationPath] = '{Wiql(sprint.Path)}' AND ({areaClause}) AND [System.ChangedDate] >= '{cutoff}'";
         var wiql = await SendAsync(HttpMethod.Post,
-            $"{OrgPath}/{Segment(projectId)}/_apis/wit/wiql?timePrecision=true&$top=20000&{Version}", new { query }, cancellationToken);
+            $"{OrgPath}/{Segment(projectId)}/_apis/wit/wiql?timePrecision=true&$top=20000&{Version}", new WiqlRequest(query), cancellationToken);
         if (wiql.IsFailure) return Result<EffortHistory>.Failure(wiql.Error!);
         if (!TryArray(wiql.Value.Data, "workItems", out var found))
             return Incomplete<EffortHistory>("A consulta do histórico retornou dados incompletos.");
@@ -78,7 +78,7 @@ public sealed partial class AzureDevOpsGateway
         foreach (var batch in ids.Order().Chunk(200))
         {
             var response = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemsbatch?{Version}",
-                new { ids = batch, fields = new[] { "System.Title", "System.WorkItemType", "System.AreaPath", "System.IterationPath" }, errorPolicy = "Fail" }, cancellationToken);
+                new WorkItemsRequest(batch, ["System.Title", "System.WorkItemType", "System.AreaPath", "System.IterationPath"]), cancellationToken);
             if (response.IsFailure) return Result<IReadOnlyList<HistoryTask>>.Failure(response.Error!);
             if (!TryArray(response.Value.Data, "value", out var values) || values.GetArrayLength() != batch.Length)
                 return Incomplete<IReadOnlyList<HistoryTask>>("Nem todas as Tasks do histórico puderam ser lidas.");

@@ -1,16 +1,8 @@
 @page "/Error"
-@using System.Diagnostics
 
 <PageTitle>Erro · TimeOps</PageTitle>
 <section class="empty-state">
     <h1>Não foi possível abrir esta página</h1>
     <p>Ocorreu um erro inesperado. Volte ao painel e tente novamente.</p>
-    <p><a href="/">Voltar à visão da sprint</a></p>
-    @if (RequestId is not null) { <p class="hint">Identificação: @RequestId</p> }
+    <p><a href="./">Voltar à visão da sprint</a></p>
 </section>
-
-@code {
-    [CascadingParameter] private HttpContext? HttpContext { get; set; }
-    private string? RequestId { get; set; }
-    protected override void OnInitialized() => RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
-}

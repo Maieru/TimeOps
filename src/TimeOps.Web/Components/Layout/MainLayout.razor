@@ -5,7 +5,7 @@
 
 <div class="shell">
     <aside class="sidebar">
-        <a class="brand" href="/" aria-label="TimeOps, início"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
+        <a class="brand" href="./" aria-label="TimeOps, início"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
         <nav class="sidebar-nav" aria-label="Visões da sprint">
             <button class="sidebar-pill @(Navigation.Current == DashboardView.Team ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Team ? "true" : "false")" @onclick="() => SelectView(DashboardView.Team)">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19v-1.2A4.8 4.8 0 0 1 7.3 13h1.4a4.8 4.8 0 0 1 4.8 4.8V19H2.5Zm11 0v-1.2c0-1.1-.3-2.2-.9-3.1.8-1.1 2.1-1.7 3.4-1.7h.7a4.8 4.8 0 0 1 4.8 4.8V19h-8Z"/></svg>
@@ -30,7 +30,7 @@
     <main class="main-content">@Body</main>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="/">Recarregar</a></div>
+<div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="./">Recarregar</a></div>
 
 @code {
     protected override void OnInitialized() => Navigation.Changed += Refresh;
@@ -38,7 +38,7 @@
     private void SelectView(DashboardView view)
     {
         Navigation.Select(view);
-        if (new Uri(Router.Uri).AbsolutePath != "/") Router.NavigateTo("/");
+        if (Router.ToBaseRelativePath(Router.Uri) != "") Router.NavigateTo("");
     }
 
     private void Refresh() => _ = InvokeAsync(StateHasChanged);

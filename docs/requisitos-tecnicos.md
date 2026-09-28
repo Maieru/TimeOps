@@ -2,7 +2,7 @@
 
 ## Plataforma e limites da entrega
 
-**RT-01.** Implementar o piloto em C#, .NET 10 LTS e ASP.NET Core, com Blazor Web App em modo interativo no servidor. A aplicação terá um único processo de implantação e não utilizará banco de dados.
+**RT-01.** Implementar em C#, .NET 10 e Blazor WebAssembly standalone. Interface, regras, cache e integração executam no navegador. A implantação contém somente arquivos estáticos e não utiliza banco de dados.
 
 **RT-02.** O piloto deverá escutar exclusivamente em interfaces de loopback. Será usado localmente, sem login próprio, para consultar uma organização configurada e uma equipe por vez. Compartilhamento em rede exigirá uma nova etapa de autenticação e hospedagem.
 
@@ -74,9 +74,9 @@ Este documento registra os requisitos do aplicativo implementado e suas limitaç
 
 **RT-18.** Usar PAT com permissões mínimas de leitura requeridas pelos endpoints, incluindo leitura de work items e de projetos/equipes. Documentar na implementação os escopos efetivamente necessários e validar a conexão sem solicitar acesso total à organização.
 
-**RT-19.** Permitir informar organização e PAT durante a execução, em formulário local. No Windows, oferecer persistência opcional, marcada por padrão, como credencial genérica do Gerenciador de Credenciais, limitada ao usuário do sistema e ao computador local. Recuperar a conexão ao iniciar nova sessão e oferecer ação explícita para apagar a credencial salva e descartar a conexão da sessão corrente. Sem esse cofre, manter o PAT somente na memória da sessão. Não persistir o PAT em appsettings, User Secrets, arquivos próprios, URLs, logs, cache de apresentação ou respostas para o navegador. Usar HTTPS nas chamadas ao DevOps. O piloto localhost não autentica cada visitante; executá-lo apenas em computador local confiável.
+**RT-19.** Informar organização e PAT no navegador. Oferecer persistência opcional, marcada por padrão, em localStorage por origem, perfil e caminho base. Sem persistência, manter o PAT somente na memória da aba e remover credencial salva anteriormente. Restaurar ao recarregar e oferecer ação para apagar o armazenamento e descartar a conexão atual. Não enviar o PAT ao host estático nem incluí-lo em configuração, URLs, logs ou arquivos versionados. Usar HTTPS para dev.azure.com. Informar que localStorage não é um cofre e é acessível a scripts da mesma origem; usar apenas em perfil confiável. Outras abas abertas podem manter a conexão até recarregar. Tratar falhas e dados corrompidos de armazenamento sem expor o PAT.
 
-**RT-20.** Permitir informar a organização no formulário e configurar o fuso no servidor. Aceitar apenas o nome da organização, sem URL arbitrária; o cliente deverá construir as consultas exclusivamente para `dev.azure.com`.
+**RT-20.** Permitir informar a organização no formulário e configurar o fuso na configuração pública do cliente. Aceitar apenas o nome da organização, sem URL arbitrária; o cliente deverá construir as consultas exclusivamente para `dev.azure.com`.
 
 **RT-21.** Mensagens de erro não deverão revelar token, cabeçalhos de autenticação ou respostas sensíveis. Os dados visíveis serão os acessíveis ao titular do PAT; o piloto não possui controle de acesso por usuário do aplicativo.
 
@@ -112,7 +112,7 @@ Este documento registra os requisitos do aplicativo implementado e suas limitaç
 | Integração real | Smoke test explícito com organização de teste e PAT informado localmente no aplicativo; validar leitura de equipe/sprint e amostra de totais; nunca depender de segredo versionado |
 | Web | Verificar navegação, idioma, detalhes, links, atualização manual e distinção entre indisponível, zero, incompleto e desatualizado |
 | Arquitetura | Testes automatizados de referências e dependências de tipos impedindo violações de RT-03 a RT-07, incluindo uso de Infrastructure fora da composição em Web |
-| Segurança | Confirmar binding somente em loopback, armazenamento no cofre do usuário do Windows, restauração e exclusão da credencial, descarte do PAT da sessão corrente ao trocar conexão e ausência do token em respostas, logs, cache de apresentação e arquivos versionados |
+| Segurança | Confirmar armazenamento e restauração no navegador, exclusão da credencial, descarte da sessão corrente e isolamento entre perfis; ausência de PAT em requisições ao host estático, URLs, logs e arquivos versionados |
 | Result pattern | Verificar invariantes de sucesso/falha, propagação entre camadas, conversão de falhas de integração, tratamento explícito na Web, cancelamento e ausência de detalhes sensíveis nos erros, conforme RT-32 a RT-35 |
 
 **RT-30.** Os testes de arquitetura deverão falhar se Domain referenciar outro projeto, Application referenciar Infrastructure/Web, camadas internas dependerem dos frameworks proibidos ou componentes Web acessarem implementações externas diretamente.
@@ -128,3 +128,7 @@ Este documento registra os requisitos do aplicativo implementado e suas limitaç
 - RT-32 a RT-35 padronizam sucesso e falhas em todas as camadas, preservando as regras de disponibilidade de dados e tratamento de erros.
 
 As premissas, limitações e referências oficiais estão no [índice da documentação](README.md). Os critérios funcionais completos estão nos [requisitos de negócio](requisitos-negocio.md).
+
+## Hospedagem estática e navegador
+
+O workflow de Pages publica apenas o projeto Web, ajusta o caminho base e inclui fallback 404 e .nojekyll. Validar CORS dos endpoints GET e POST do DevOps na origem final, incluindo cabeçalhos de paginação. A política do DevOps não pode ser corrigida no host estático. A integração real permanece dependente de organização e PAT de teste fornecidos pelo usuário.

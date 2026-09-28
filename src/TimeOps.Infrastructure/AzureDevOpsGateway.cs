@@ -134,7 +134,7 @@ public sealed partial class AzureDevOpsGateway(
             ? $"[System.AreaPath] UNDER '{Wiql(area.Path)}'"
             : $"[System.AreaPath] = '{Wiql(area.Path)}'"));
         var query = $"SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] = 'Task' AND [System.IterationPath] = '{Wiql(sprint.Path)}' AND ({areaClause})";
-        var wiql = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/wiql?$top=20000&{Version}", new { query }, cancellationToken);
+        var wiql = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/wiql?$top=20000&{Version}", new WiqlRequest(query), cancellationToken);
         if (wiql.IsFailure) return Result<IReadOnlyList<TaskWork>>.Failure(wiql.Error!);
         if (!TryArray(wiql.Value.Data, "workItems", out var found)) return Incomplete<IReadOnlyList<TaskWork>>("A consulta WIQL retornou dados incompletos.");
         var ids = new List<int>();
@@ -155,7 +155,7 @@ public sealed partial class AzureDevOpsGateway(
         foreach (var batch in ids.Chunk(200))
         {
             var response = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemsbatch?{Version}",
-                new { ids = batch, fields = selectedFields, errorPolicy = "Fail" }, cancellationToken);
+                new WorkItemsRequest(batch, selectedFields), cancellationToken);
             if (response.IsFailure) return Result<IReadOnlyList<TaskWork>>.Failure(response.Error!);
             if (!TryArray(response.Value.Data, "value", out var values) || values.GetArrayLength() != batch.Length)
                 return Incomplete<IReadOnlyList<TaskWork>>("Nem todas as Tasks da sprint puderam ser lidas.");
@@ -304,7 +304,7 @@ public sealed partial class AzureDevOpsGateway(
                 using var request = new HttpRequestMessage(method, "https://dev.azure.com/" + path);
                 var token = connection.Token;
                 request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + token)));
-                if (body is not null) request.Content = JsonContent.Create(body);
+                if (body is not null) request.Content = JsonContent.Create(body, DevOpsRequestJsonContext.Default.GetTypeInfo(body.GetType())!);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
@@ -349,7 +349,7 @@ public sealed partial class AzureDevOpsGateway(
             catch (HttpRequestException exception)
             {
                 logger.LogWarning(exception, "Falha de rede ao consultar Azure DevOps");
-                return Result<JsonResponse>.Failure(new("devops.network", ErrorCategory.Unavailable, "Não foi possível conectar ao Azure DevOps."));
+                return Result<JsonResponse>.Failure(new("devops.network", ErrorCategory.Unavailable, "Não foi possível conectar ao Azure DevOps. Verifique a rede e se o navegador bloqueou a consulta por CORS."));
             }
             catch (JsonException exception)
             {
