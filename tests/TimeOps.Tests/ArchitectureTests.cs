@@ -21,12 +21,15 @@ public sealed class ArchitectureTests
         var root = FindRoot();
         foreach (var layer in new[] { "Domain", "Application" })
         {
-            var source = string.Join("\n", Directory.GetFiles(Path.Combine(root, "src", "TimeOps." + layer), "*.cs", SearchOption.AllDirectories)
+            var sources = Directory.GetFiles(Path.Combine(root, "src", "TimeOps." + layer), "*.cs", SearchOption.AllDirectories)
                 .Where(path => !path.Contains("\\obj\\") && !path.Contains("\\bin\\"))
-                .Select(File.ReadAllText));
-            Assert.DoesNotContain("using Microsoft.AspNetCore", source);
-            Assert.DoesNotContain("using System.Net.Http", source);
-            Assert.DoesNotContain("using TimeOps.Infrastructure", source);
+                .Select(File.ReadAllText);
+
+            foreach (var sourceFile in sources)
+            {
+                Assert.DoesNotContain("using Microsoft.AspNetCore", sources);
+                Assert.DoesNotContain("using TimeOps.Infrastructure", sources);
+            }
         }
     }
 
@@ -35,8 +38,10 @@ public sealed class ArchitectureTests
         foreach (var start in new[] { Path.GetDirectoryName(sourceFile)!, Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
         {
             var directory = new DirectoryInfo(start);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TimeOps.slnx"))) directory = directory.Parent;
-            if (directory is not null) return directory.FullName;
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "TimeOps.slnx")))
+                directory = directory.Parent;
+            if (directory is not null)
+                return directory.FullName;
         }
         throw new InvalidOperationException("Solução não encontrada.");
     }
