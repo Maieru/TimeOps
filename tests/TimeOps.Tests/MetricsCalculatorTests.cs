@@ -101,6 +101,48 @@ public sealed class MetricsCalculatorTests
         Assert.Equal(40m / 120m * 100m, result.Value.Team.Coverage);
     }
 
+    [Fact]
+    public void Soma_tasks_por_historia_e_feature_sem_duplicar_e_mantem_sem_vinculo()
+    {
+        var tasks = new[]
+        {
+            Task(1, Ana, 2) with { ParentId = 11 },
+            Task(2, Ana, 4) with { ParentId = 11 },
+            Task(3, Ana, 2) with { ParentId = 12 },
+            Task(4, Ana, 4) with { ParentId = 12 },
+            Task(5, Ana, 4) with { ParentId = 12 },
+            Task(6, Ana, null)
+        };
+        var parents = new ParentWorkItem[]
+        {
+            new(11, "História 1", "User Story", 20, "https://example.com/11"),
+            new(12, "História 2", "User Story", 20, "https://example.com/12"),
+            new(20, "Feature A", "Feature", null, "https://example.com/20")
+        };
+        var snapshot = Snapshot(tasks.Append(tasks[0]).ToArray()) with { Parents = parents };
+
+        var result = MetricsCalculator.Calculate(snapshot, new(2026, 9, 25), new(2026, 9, 27));
+
+        var features = Assert.IsAssignableFrom<IReadOnlyList<FeatureEffort>>(result.Value.Features);
+        Assert.Equal(16, features.Single(feature => feature.Feature?.Id == 20).Completed);
+        Assert.Equal(new decimal?[] { 6, 10 }, features.Single(feature => feature.Feature?.Id == 20).Stories.Select(story => story.Completed));
+        Assert.Equal(0, features.Single(feature => feature.Feature is null).Completed);
+        Assert.Equal(result.Value.Team.Completed, features.Sum(feature => feature.Completed));
+    }
+
+    [Fact]
+    public void Hierarquia_nao_exibe_zero_quando_completed_indisponivel()
+    {
+        var snapshot = Snapshot([Task(1, Ana, null) with { ParentId = 11 }], fields: new(false, true, true))
+            with { Parents = [new(11, "História", "User Story", null, "https://example.com/11")] };
+
+        var result = MetricsCalculator.Calculate(snapshot, new(2026, 9, 25), new(2026, 9, 27));
+
+        var features = Assert.IsAssignableFrom<IReadOnlyList<FeatureEffort>>(result.Value.Features);
+        Assert.Null(features.Single().Completed);
+        Assert.Null(features.Single().Stories.Single().Completed);
+    }
+
     private static SprintSnapshot Snapshot(IReadOnlyList<TaskWork> tasks, IReadOnlyList<MemberCapacity>? capacities = null,
         IReadOnlyList<DayRange>? daysOff = null, Sprint? sprint = null, EffortFields? fields = null)
         => new(sprint ?? Sprint, new(new HashSet<DayOfWeek> { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday }, daysOff ?? []),

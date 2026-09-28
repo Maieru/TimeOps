@@ -30,6 +30,7 @@ public static class MetricsCalculator
         if (!snapshot.Fields.Completed) warnings.Add(new("field.completed.missing", "Completed não está disponível para Tasks neste processo; as métricas derivadas não podem ser calculadas."));
         if (!snapshot.Fields.Original) warnings.Add(new("field.original.missing", "Original Estimate não está disponível para Tasks neste processo."));
         if (!snapshot.Fields.Remaining) warnings.Add(new("field.remaining.missing", "Remaining Work não está disponível para Tasks neste processo."));
+        if (snapshot.HierarchyError is not null) warnings.Add(new("hierarchy.unavailable", snapshot.HierarchyError));
 
         decimal? Aggregate(Func<PersonMetrics, decimal?> selector) => groups.All(group => selector(group).HasValue)
             ? groups.Sum(group => selector(group)!.Value) : null;
@@ -51,7 +52,39 @@ public static class MetricsCalculator
             futureCapacity.HasValue && remaining.HasValue ? futureCapacity - remaining : null,
             tasks.Length, done, tasks.Length > 0 ? (decimal)done / tasks.Length * 100 : null, categoryCounts);
 
-        return Result<Dashboard>.Success(new(snapshot.Sprint, referenceDate, snapshot.CollectedAt, metrics, unassigned, team, warnings));
+        var features = snapshot.HierarchyError is null ? BuildFeatures(tasks, snapshot.Parents ?? [], snapshot.Fields.Completed) : null;
+        return Result<Dashboard>.Success(new(snapshot.Sprint, referenceDate, snapshot.CollectedAt, metrics, unassigned, team, warnings, features, snapshot.HierarchyError));
+    }
+
+    private static IReadOnlyList<FeatureEffort> BuildFeatures(IReadOnlyList<TaskWork> tasks,
+        IReadOnlyList<ParentWorkItem> parents, bool completedAvailable)
+    {
+        var byId = parents.DistinctBy(item => item.Id).ToDictionary(item => item.Id);
+        var located = tasks.Select(task =>
+        {
+            byId.TryGetValue(task.ParentId ?? 0, out var parent);
+            if (parent is not null && parent.Type.Equals("Feature", StringComparison.OrdinalIgnoreCase))
+                return (Task: task, FeatureId: parent.Id, StoryId: 0);
+            var featureId = parent?.ParentId is int id && byId.TryGetValue(id, out var feature)
+                && feature.Type.Equals("Feature", StringComparison.OrdinalIgnoreCase) ? feature.Id : 0;
+            return (Task: task, FeatureId: featureId, StoryId: parent?.Id ?? 0);
+        });
+
+        return located.GroupBy(item => item.FeatureId)
+            .OrderBy(group => group.Key == 0).ThenBy(group => byId.GetValueOrDefault(group.Key)?.Title, StringComparer.CurrentCultureIgnoreCase)
+            .Select(featureGroup =>
+            {
+                var stories = featureGroup.GroupBy(item => item.StoryId)
+                    .OrderBy(group => group.Key == 0).ThenBy(group => byId.GetValueOrDefault(group.Key)?.Title, StringComparer.CurrentCultureIgnoreCase)
+                    .Select(group =>
+                    {
+                        var storyTasks = group.Select(item => item.Task).OrderBy(task => task.Title, StringComparer.CurrentCultureIgnoreCase).ToArray();
+                        return new StoryEffort(byId.GetValueOrDefault(group.Key), storyTasks,
+                            completedAvailable ? storyTasks.Sum(task => task.Completed ?? 0) : null);
+                    }).ToArray();
+                return new FeatureEffort(byId.GetValueOrDefault(featureGroup.Key), stories,
+                    completedAvailable ? stories.Sum(story => story.Completed ?? 0) : null);
+            }).ToArray();
     }
 
     private static PersonMetrics BuildPerson(Person? person, MemberCapacity? capacity, IReadOnlyList<TaskWork> tasks,

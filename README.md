@@ -24,7 +24,7 @@ O armazenamento do navegador **não é um cofre criptografado**: scripts da mesm
 
 ## Funcionalidades e integração
 
-As visões de equipe, pessoa e **Histórico 24 h** mantêm os mesmos cálculos e regras. O histórico mostra diferenças entre revisões de `Completed Work`, `Original Estimate` e `Remaining Work` nas Tasks do escopo atual, não apontamentos individuais. Completed é o valor **atual** do work item, mesmo ao selecionar uma referência anterior.
+As visões de equipe, pessoa, **Features e histórias** e histórico mantêm os mesmos cálculos e regras. A visão de features soma o `Completed Work` das Tasks da sprint por história e feature, com cada nível expansível. Tasks sem vínculo aparecem em grupos próprios. O histórico mostra diferenças entre revisões de `Completed Work`, `Original Estimate` e `Remaining Work` nas Tasks do escopo atual, não apontamentos individuais. Completed é o valor **atual** do work item, mesmo ao selecionar uma referência anterior.
 
 As chamadas ao DevOps agora estão sujeitas ao **CORS do navegador**. Falhas de rede orientam verificar esse bloqueio. Antes de disponibilizar para a equipe, valide os endpoints GET e POST, paginação e histórico com uma organização e PAT reais, a partir do endereço final do site. O host estático não consegue alterar a política CORS do Azure DevOps; se algum endpoint for bloqueado, será necessário rever a integração. Não desative a segurança do navegador.
 

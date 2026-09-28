@@ -248,6 +248,10 @@ else
             <div class="person-empty">Nenhuma pessoa com capacidade ou Task nesta sprint.</div>
         }
     }
+    else if (viewMode == DashboardView.Features)
+    {
+        <FeatureHierarchy Features="@(dashboard.Features ?? [])" TaskCount="@dashboard.Team.TaskCount" Error="@dashboard.HierarchyError" />
+    }
     else
     {
         <section class="history-panel" aria-label="Histórico de alterações de tarefas" aria-busy="@(busy ? "true" : "false")">
@@ -342,12 +346,14 @@ else
     private string ViewTitle => viewMode switch
     {
         DashboardView.Person => "Pessoa",
+        DashboardView.Features => "Features e histórias",
         DashboardView.History => "Histórico de alterações de tarefas",
         _ => "Equipe"
     };
     private string ViewSubtitle => viewMode switch
     {
         DashboardView.Person => "Capacidade, horas e Tasks de cada integrante da sprint.",
+        DashboardView.Features => "Horas registradas por feature, história de usuário e Task.",
         DashboardView.History => "Alterações recentes nas horas das Tasks desta sprint.",
         _ => "Capacidade e horas registradas, diretamente do Azure DevOps."
     };
@@ -616,6 +622,7 @@ else
         "field.completed.missing" => "Completed indisponível",
         "field.original.missing" => "Estimativa original indisponível",
         "field.remaining.missing" => "Trabalho restante indisponível",
+        "hierarchy.unavailable" => "Hierarquia indisponível",
         _ => "Outros avisos"
     };
     private static string CategoryLabel(string category) => category switch

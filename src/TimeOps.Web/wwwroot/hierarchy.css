@@ -1,0 +1,52 @@
+.hierarchy-panel { margin-top: 26px; }
+.hierarchy-heading { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 17px; }
+.hierarchy-heading h2 { margin: 0 0 6px; color: var(--ink); font-size: 20px; letter-spacing: -.02em; }
+.hierarchy-heading p { max-width: 70ch; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.hierarchy-heading p strong { color: var(--ink); }
+.hierarchy-count { flex: none; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; color: #c7d9ec; font-size: 12px; font-weight: 700; }
+.hierarchy-list { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.hierarchy-feature + .hierarchy-feature { border-top: 1px solid var(--line); }
+.hierarchy-feature > summary, .hierarchy-story > summary, .hierarchy-task > summary { display: grid; grid-template-columns: 15px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 66px; padding: 12px 20px; cursor: pointer; list-style: none; }
+.hierarchy-feature > summary::before, .hierarchy-story > summary::before, .hierarchy-task > summary::before { display: none; }
+.hierarchy-feature > summary::-webkit-details-marker, .hierarchy-story > summary::-webkit-details-marker, .hierarchy-task > summary::-webkit-details-marker { display: none; }
+.hierarchy-feature > summary:hover, .hierarchy-story > summary:hover, .hierarchy-task > summary:hover { background: #21344d; }
+.hierarchy-feature > summary:focus-visible, .hierarchy-story > summary:focus-visible, .hierarchy-task > summary:focus-visible { outline: 2px solid #8ac2ff; outline-offset: -3px; }
+.hierarchy-feature[open] > summary { background: #1e3048; }
+.hierarchy-story[open] > summary { background: #1a2b40; }
+.hierarchy-chevron { width: 8px; height: 8px; border-right: 2px solid #9bb7d4; border-bottom: 2px solid #9bb7d4; transform: rotate(-45deg); transition: transform 170ms ease; }
+details[open] > summary > .hierarchy-chevron { transform: rotate(45deg); }
+.hierarchy-identity { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 11px; min-width: 0; }
+.hierarchy-kind { color: var(--quiet); font-size: 11px; font-weight: 750; white-space: nowrap; }
+.hierarchy-identity strong { min-width: 0; color: var(--ink); font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.hierarchy-identity small { display: inline; margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.hierarchy-hours { color: var(--ink); font-size: 16px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hierarchy-children { padding: 0 0 10px 29px; border-top: 1px solid var(--line); }
+.hierarchy-story { border-bottom: 1px solid var(--line); }
+.hierarchy-story:last-child { border-bottom: 0; }
+.hierarchy-story > summary { min-height: 59px; padding-left: 21px; }
+.hierarchy-story .hierarchy-hours { font-size: 14px; }
+.hierarchy-story > .hierarchy-children { margin-left: 20px; border-left: 1px solid var(--line); border-top: 0; }
+.hierarchy-task { border-bottom: 1px solid #293c53; }
+.hierarchy-task:last-child { border-bottom: 0; }
+.hierarchy-task > summary { min-height: 52px; padding: 9px 18px; }
+.hierarchy-task .hierarchy-kind { color: #b3c7dc; }
+.hierarchy-task .hierarchy-identity strong { font-size: 13px; font-weight: 600; }
+.hierarchy-task .hierarchy-hours { font-size: 13px; }
+.hierarchy-parent-link { display: inline-block; margin: 10px 20px 4px; color: #9acaff; font-size: 12px; text-underline-offset: 3px; }
+.hierarchy-task-info { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 0 20px 15px 47px; color: var(--muted); font-size: 12px; }
+.hierarchy-task-info a { color: #9acaff; text-underline-offset: 3px; }
+.hierarchy-note { max-width: 80ch; margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.hierarchy-empty { padding: 28px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); font-size: 13px; }
+@media (max-width: 620px) {
+    .hierarchy-heading { display: block; }
+    .hierarchy-count { display: inline-block; margin-top: 13px; }
+    .hierarchy-feature > summary, .hierarchy-story > summary, .hierarchy-task > summary { grid-template-columns: 12px minmax(0, 1fr); gap: 9px; padding-right: 14px; padding-left: 14px; }
+    .hierarchy-hours { grid-column: 2; font-size: 14px; }
+    .hierarchy-identity { display: grid; gap: 2px; }
+    .hierarchy-identity small { white-space: normal; }
+    .hierarchy-children { padding-left: 13px; }
+    .hierarchy-story > .hierarchy-children { margin-left: 6px; padding-left: 7px; }
+    .hierarchy-parent-link { margin-left: 14px; }
+    .hierarchy-task-info { padding-left: 35px; }
+}
+@media (prefers-reduced-motion: reduce) { .hierarchy-chevron { transition: none; } }

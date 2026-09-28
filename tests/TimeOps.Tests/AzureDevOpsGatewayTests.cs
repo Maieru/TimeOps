@@ -54,6 +54,36 @@ public sealed class AzureDevOpsGatewayTests
     }
 
     [Fact]
+    public async Task Carrega_historia_e_feature_dos_pais_da_task()
+    {
+        var handler = new FixtureHandler { Hierarchy = true };
+        var gateway = Create(handler);
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+
+        var result = await gateway.LoadSnapshotAsync("p1", "t1", sprint, false, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(10, result.Value.Tasks.Single().ParentId);
+        Assert.Contains(result.Value.Parents!, parent => parent.Id == 10 && parent.ParentId == 20 && parent.Type == "User Story");
+        Assert.Contains(result.Value.Parents!, parent => parent.Id == 20 && parent.Type == "Feature");
+        Assert.Equal(3, handler.Requests.Count(request => request.Contains("workitemsbatch")));
+    }
+
+    [Fact]
+    public async Task Falha_na_leitura_dos_pais_preserva_metricas_da_sprint_e_avisa_sobre_hierarquia()
+    {
+        var handler = new FixtureHandler { Hierarchy = true, IncompleteParents = true };
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+
+        var result = await Create(handler).LoadSnapshotAsync("p1", "t1", sprint, false, CancellationToken.None);
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var dashboard = MetricsCalculator.Calculate(result.Value, new(2026, 9, 25), new(2026, 9, 27));
+        Assert.Equal(64, dashboard.Value.Team.Completed);
+        Assert.Null(dashboard.Value.Features);
+        Assert.Contains(dashboard.Value.Warnings, warning => warning.Code == "hierarchy.unavailable");
+    }
+
+    [Fact]
     public async Task Nao_faz_requisicao_sem_credencial()
     {
         var handler = new FixtureHandler();
@@ -136,6 +166,8 @@ public sealed class AzureDevOpsGatewayTests
     private sealed class FixtureHandler : HttpMessageHandler
     {
         public bool EmptyBatch { get; init; }
+        public bool Hierarchy { get; init; }
+        public bool IncompleteParents { get; init; }
         public bool PagedTeams { get; init; }
         public List<string> Requests { get; } = [];
         public Dictionary<string, string> Bodies { get; } = [];
@@ -164,10 +196,26 @@ public sealed class AzureDevOpsGatewayTests
                 var p when p.EndsWith("/Task/states", StringComparison.Ordinal) => """{"value":[{"name":"Active","category":"InProgress"},{"name":"Done","category":"Completed"}]}""",
                 var p when p.EndsWith("/workitemtypes/Task", StringComparison.Ordinal) => """{"fieldInstances":[{"referenceName":"Microsoft.VSTS.Scheduling.CompletedWork"},{"referenceName":"Microsoft.VSTS.Scheduling.OriginalEstimate"},{"referenceName":"Microsoft.VSTS.Scheduling.RemainingWork"}]}""",
                 var p when p.EndsWith("/wiql", StringComparison.Ordinal) => """{"workItems":[{"id":5},{"id":5}]}""",
-                var p when p.EndsWith("/workitemsbatch", StringComparison.Ordinal) => EmptyBatch ? """{"value":[]}""" : """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}""",
+                var p when p.EndsWith("/workitemsbatch", StringComparison.Ordinal) => BatchResponse(),
                 _ => throw new InvalidOperationException("Rota inesperada: " + path)
             };
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+        }
+
+        private string BatchResponse()
+        {
+            if (EmptyBatch) return """{"value":[]}""";
+            if (Hierarchy)
+            {
+                using var body = System.Text.Json.JsonDocument.Parse(Bodies["workitemsbatch"]);
+                var id = body.RootElement.GetProperty("ids")[0].GetInt32();
+                if (id == 10) return IncompleteParents ? """{"value":[]}"""
+                    : """{"value":[{"id":10,"fields":{"System.Id":10,"System.Title":"História","System.WorkItemType":"User Story","System.Parent":20}}]}""";
+                if (id == 20) return """{"value":[{"id":20,"fields":{"System.Id":20,"System.Title":"Feature A","System.WorkItemType":"Feature"}}]}""";
+            }
+            return Hierarchy
+                ? """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.Parent":10,"System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}"""
+                : """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}""";
         }
     }
 }

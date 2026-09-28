@@ -18,7 +18,7 @@ public sealed partial class AzureDevOpsGateway(
 {
     private const string Version = "api-version=7.1";
     private static readonly string[] EffortNames = ["Microsoft.VSTS.Scheduling.CompletedWork", "Microsoft.VSTS.Scheduling.OriginalEstimate", "Microsoft.VSTS.Scheduling.RemainingWork"];
-    private static readonly string[] BaseFields = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.AreaPath", "System.IterationPath", "System.AssignedTo"];
+    private static readonly string[] BaseFields = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.AreaPath", "System.IterationPath", "System.AssignedTo", "System.Parent"];
 
     public async Task<Result<IReadOnlyList<NamedItem>>> ListProjectsAsync(CancellationToken cancellationToken)
     {
@@ -91,7 +91,10 @@ public sealed partial class AzureDevOpsGateway(
 
         var tasks = await LoadTasksAsync(projectId, sprint, areasResult.Value, fieldsResult.Value, statesResult.Value, cancellationToken);
         if (tasks.IsFailure) return Result<SprintSnapshot>.Failure(tasks.Error!);
-        var snapshot = new SprintSnapshot(sprint, calendarResult.Value, capacitiesResult.Value, tasks.Value, fieldsResult.Value, clock.GetUtcNow());
+        var parents = await LoadParentsAsync(projectId, tasks.Value, cancellationToken);
+        var snapshot = new SprintSnapshot(sprint, calendarResult.Value, capacitiesResult.Value, tasks.Value, fieldsResult.Value, clock.GetUtcNow(),
+            parents.IsSuccess ? parents.Value : null,
+            parents.IsFailure ? "Não foi possível consultar as histórias e features vinculadas. Atualize os dados ou verifique o acesso aos itens pais no Azure DevOps." : null);
         cache.Set(key, snapshot, TimeSpan.FromMinutes(5));
         return Result<SprintSnapshot>.Success(snapshot);
     }
@@ -171,6 +174,47 @@ public sealed partial class AzureDevOpsGateway(
         return Result<IReadOnlyList<TaskWork>>.Success(tasks);
     }
 
+    private async Task<Result<IReadOnlyList<ParentWorkItem>>> LoadParentsAsync(string projectId,
+        IReadOnlyList<TaskWork> tasks, CancellationToken cancellationToken)
+    {
+        var parents = new Dictionary<int, ParentWorkItem>();
+        var firstLevel = tasks.Where(task => task.ParentId is > 0).Select(task => task.ParentId!.Value).Distinct().ToArray();
+        var first = await LoadParentBatchAsync(projectId, firstLevel, parents, cancellationToken);
+        if (first.IsFailure) return Result<IReadOnlyList<ParentWorkItem>>.Failure(first.Error!);
+
+        var secondLevel = parents.Values.Where(parent => !parent.Type.Equals("Feature", StringComparison.OrdinalIgnoreCase))
+            .Where(parent => parent.ParentId is > 0).Select(parent => parent.ParentId!.Value)
+            .Where(id => !parents.ContainsKey(id)).Distinct().ToArray();
+        var second = await LoadParentBatchAsync(projectId, secondLevel, parents, cancellationToken);
+        return second.IsFailure ? Result<IReadOnlyList<ParentWorkItem>>.Failure(second.Error!)
+            : Result<IReadOnlyList<ParentWorkItem>>.Success(parents.Values.ToArray());
+    }
+
+    private async Task<Result> LoadParentBatchAsync(string projectId, int[] ids,
+        Dictionary<int, ParentWorkItem> parents, CancellationToken cancellationToken)
+    {
+        foreach (var batch in ids.Chunk(200))
+        {
+            var response = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemsbatch?{Version}",
+                new WorkItemsRequest(batch, ["System.Id", "System.Title", "System.WorkItemType", "System.Parent"]), cancellationToken);
+            if (response.IsFailure) return Result.Failure(response.Error!);
+            if (!TryArray(response.Value.Data, "value", out var values) || values.GetArrayLength() != batch.Length)
+                return Result.Failure(new("devops.incomplete", ErrorCategory.Incomplete, "Nem todas as histórias ou features vinculadas às Tasks puderam ser lidas."));
+            foreach (var item in values.EnumerateArray())
+            {
+                var id = Int(item, "id");
+                var fields = Property(item, "fields");
+                var title = String(fields, "System.Title");
+                var type = String(fields, "System.WorkItemType");
+                if (id is null || title is null || type is null || !batch.Contains(id.Value))
+                    return Result.Failure(new("devops.incomplete", ErrorCategory.Incomplete, "Uma história ou feature retornou dados incompletos."));
+                parents[id.Value] = new(id.Value, title, type, Int(fields, "System.Parent"),
+                    $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}");
+            }
+        }
+        return Result.Success();
+    }
+
     private Result<TaskWork?> ParseTask(JsonElement item, string projectId, Sprint sprint,
         IReadOnlyList<AreaRule> areas, IReadOnlyDictionary<string, string> categories)
     {
@@ -201,7 +245,8 @@ public sealed partial class AzureDevOpsGateway(
             return Incomplete<TaskWork?>("O responsável de uma Task não contém identidade estável.");
         return Result<TaskWork?>.Success(new(id.Value, title, person, state, category, area, iteration,
             Decimal(fields, EffortNames[0]), Decimal(fields, EffortNames[1]), Decimal(fields, EffortNames[2]),
-            $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}"));
+            $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}",
+            Int(fields, "System.Parent")));
     }
 
     private static Result<TeamCalendar> ParseCalendar(JsonElement settings, JsonElement daysOff)

@@ -14,11 +14,16 @@ public sealed record EffortFields(bool Completed, bool Original, bool Remaining)
 public sealed record TaskWork(
     int Id, string Title, Person? Assignee, string State, string StateCategory,
     string AreaPath, string IterationPath, decimal? Completed, decimal? Original,
-    decimal? Remaining, string Url);
+    decimal? Remaining, string Url, int? ParentId = null);
+
+public sealed record ParentWorkItem(int Id, string Title, string Type, int? ParentId, string Url);
+public sealed record StoryEffort(ParentWorkItem? Story, IReadOnlyList<TaskWork> Tasks, decimal? Completed);
+public sealed record FeatureEffort(ParentWorkItem? Feature, IReadOnlyList<StoryEffort> Stories, decimal? Completed);
 
 public sealed record SprintSnapshot(
     Sprint Sprint, TeamCalendar Calendar, IReadOnlyList<MemberCapacity> Capacities,
-    IReadOnlyList<TaskWork> Tasks, EffortFields Fields, DateTimeOffset CollectedAt);
+    IReadOnlyList<TaskWork> Tasks, EffortFields Fields, DateTimeOffset CollectedAt,
+    IReadOnlyList<ParentWorkItem>? Parents = null, string? HierarchyError = null);
 
 public sealed record DataWarning(string Code, string Message);
 
@@ -39,7 +44,8 @@ public sealed record TeamMetrics(
 public sealed record Dashboard(
     Sprint Sprint, DateOnly ReferenceDate, DateTimeOffset CollectedAt,
     IReadOnlyList<PersonMetrics> People, PersonMetrics? Unassigned,
-    TeamMetrics Team, IReadOnlyList<DataWarning> Warnings);
+    TeamMetrics Team, IReadOnlyList<DataWarning> Warnings,
+    IReadOnlyList<FeatureEffort>? Features = null, string? HierarchyError = null);
 
 public enum EffortField { Completed, Original, Remaining }
 

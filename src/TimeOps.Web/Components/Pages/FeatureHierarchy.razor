@@ -1,0 +1,86 @@
+@using System.Globalization
+@using TimeOps.Domain
+
+<section class="hierarchy-panel" aria-label="Horas por feature e história">
+    <div class="hierarchy-heading">
+        <div>
+            <h2>Horas por feature</h2>
+            <p>Totais de <strong>Completed Work</strong> das Tasks desta sprint e equipe. Abra cada linha para ver a composição das horas.</p>
+        </div>
+        <span class="hierarchy-count">@TaskCount @(TaskCount == 1 ? "Task" : "Tasks")</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="hierarchy-empty" role="status">@Error</div>
+    }
+    else if (TaskCount == 0)
+    {
+        <div class="hierarchy-empty">Nenhuma Task encontrada nesta sprint. Selecione outra sprint ou atualize os dados.</div>
+    }
+    else
+    {
+        <div class="hierarchy-list">
+            @foreach (var feature in Features)
+            {
+                var featureTaskCount = feature.Stories.Sum(story => story.Tasks.Count);
+                <details class="hierarchy-feature">
+                    <summary>
+                        <span class="hierarchy-chevron" aria-hidden="true"></span>
+                        <span class="hierarchy-identity"><span class="hierarchy-kind">@(feature.Feature is null ? "Sem vínculo" : "Feature")</span><strong>@(feature.Feature?.Title ?? "Sem feature")</strong><small>@featureTaskCount @(featureTaskCount == 1 ? "Task" : "Tasks")</small></span>
+                        <span class="hierarchy-hours">@Hours(feature.Completed)</span>
+                    </summary>
+                    <div class="hierarchy-children">
+                        @if (feature.Feature is not null)
+                        {
+                            <a class="hierarchy-parent-link" href="@feature.Feature.Url" target="_blank" rel="noopener noreferrer">Abrir feature #@feature.Feature.Id no Azure DevOps ↗</a>
+                        }
+                        @foreach (var story in feature.Stories)
+                        {
+                            <details class="hierarchy-story">
+                                <summary>
+                                    <span class="hierarchy-chevron" aria-hidden="true"></span>
+                                    <span class="hierarchy-identity"><span class="hierarchy-kind">@(story.Story?.Type ?? "Sem vínculo")</span><strong>@(story.Story?.Title ?? "Tasks sem história")</strong><small>@story.Tasks.Count @(story.Tasks.Count == 1 ? "Task" : "Tasks")</small></span>
+                                    <span class="hierarchy-hours">@Hours(story.Completed)</span>
+                                </summary>
+                                <div class="hierarchy-children">
+                                    @if (story.Story is not null)
+                                    {
+                                        <a class="hierarchy-parent-link" href="@story.Story.Url" target="_blank" rel="noopener noreferrer">Abrir história #@story.Story.Id no Azure DevOps ↗</a>
+                                    }
+                                    @foreach (var task in story.Tasks)
+                                    {
+                                        <details class="hierarchy-task">
+                                            <summary>
+                                                <span class="hierarchy-chevron" aria-hidden="true"></span>
+                                                <span class="hierarchy-identity"><span class="hierarchy-kind">Task #@task.Id</span><strong>@task.Title</strong></span>
+                                                <span class="hierarchy-hours">@Hours(story.Completed is null ? null : task.Completed ?? 0)</span>
+                                            </summary>
+                                            <div class="hierarchy-task-info">
+                                                <span>@task.State · @(task.Assignee?.Name ?? "Sem responsável")</span>
+                                                @if (task.Completed is null && story.Completed is not null)
+                                                {
+                                                    <span>Completed vazio: 0 h na soma</span>
+                                                }
+                                                <a href="@task.Url" target="_blank" rel="noopener noreferrer">Abrir Task no Azure DevOps ↗</a>
+                                            </div>
+                                        </details>
+                                    }
+                                </div>
+                            </details>
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+        <p class="hierarchy-note">Tasks sem vínculo de hierarquia aparecem em “Sem feature” ou “Tasks sem história”. Campos Completed vazios entram como zero e são sinalizados nos avisos sobre os dados.</p>
+    }
+</section>
+
+@code {
+    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    [Parameter, EditorRequired] public IReadOnlyList<FeatureEffort> Features { get; set; } = [];
+    [Parameter, EditorRequired] public int TaskCount { get; set; }
+    [Parameter] public string? Error { get; set; }
+    private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
+}
