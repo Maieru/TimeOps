@@ -49,13 +49,15 @@ public sealed class DashboardService(IDevOpsGateway gateway, IRuntimeConnection 
     public Task<Result<IReadOnlyList<Sprint>>> ListSprintsAsync(string projectId, string teamId, CancellationToken cancellationToken = default)
         => gateway.ListSprintsAsync(projectId, teamId, cancellationToken);
 
-    public Task<Result<EffortHistory>> GetLastDayEffortHistoryAsync(string projectId, string teamId, Sprint sprint,
+    public Task<Result<EffortHistory>> GetEffortHistoryAsync(string projectId, string teamId, Sprint sprint, int days,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(teamId) || string.IsNullOrWhiteSpace(sprint.Id))
             return Task.FromResult(Result<EffortHistory>.Failure(new("context.invalid", ErrorCategory.Validation, "Selecione projeto, equipe e sprint.")));
+        if (days is not (1 or 7 or 30))
+            return Task.FromResult(Result<EffortHistory>.Failure(new("history.window", ErrorCategory.Validation, "Selecione 24 horas, 7 dias ou 30 dias.")));
         var to = clock.GetUtcNow();
-        return gateway.LoadEffortHistoryAsync(projectId, teamId, sprint, to.AddHours(-24), to, cancellationToken);
+        return gateway.LoadEffortHistoryAsync(projectId, teamId, sprint, to.AddDays(-days), to, cancellationToken);
     }
 
     public async Task<Result<Dashboard>> GetDashboardAsync(string projectId, string teamId, Sprint sprint,

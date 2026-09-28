@@ -17,7 +17,7 @@
             </button>
             <button class="sidebar-pill @(Navigation.Current == DashboardView.History ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.History ? "true" : "false")" @onclick="() => SelectView(DashboardView.History)">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.4 2"/></svg>
-                <span>Histórico 24 h</span>
+                <span>Histórico de tarefas</span>
             </button>
         </nav>
         <div class="sidebar-context" aria-label="Contexto selecionado">

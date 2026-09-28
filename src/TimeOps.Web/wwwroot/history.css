@@ -2,7 +2,8 @@
 .history-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:26px 28px 21px;border-bottom:1px solid var(--line)}
 .history-heading h2{margin:0 0 7px;color:var(--ink);font-size:21px;letter-spacing:-.02em}
 .history-heading p{margin:0;max-width:700px;color:var(--muted);font-size:13px;line-height:1.5}
-.history-heading>span{color:var(--quiet);font-size:12px;white-space:nowrap}
+.history-controls{display:flex;flex-direction:column;gap:10px;min-width:180px;flex-shrink:0}
+.history-controls>span{color:var(--quiet);font-size:12px}
 .history-list{list-style:none;margin:0;padding:0}
 .history-entry{display:grid;grid-template-columns:122px minmax(0,1fr) minmax(150px,auto);align-items:center;gap:18px;padding:18px 28px;border-bottom:1px solid var(--line)}
 .history-entry:last-child{border-bottom:0}
@@ -15,5 +16,5 @@
 .history-values strong{color:var(--ink);font-size:17px}
 .history-empty{padding:36px 28px;color:var(--muted);font-size:14px}
 .history-note{margin:0;padding:17px 28px;background:var(--surface-deep);color:var(--quiet);font-size:12px;line-height:1.5;border-top:1px solid var(--line)}
-@media(max-width:760px){.history-heading{display:block;padding:22px 20px}.history-heading>span{display:block;margin-top:10px}.history-entry{grid-template-columns:1fr auto;gap:10px;padding:17px 20px}.history-entry time{grid-column:1/-1}.history-note{padding:17px 20px}}
+@media(max-width:760px){.history-heading{display:block;padding:22px 20px}.history-controls{margin-top:16px;min-width:0}.history-entry{grid-template-columns:1fr auto;gap:10px;padding:17px 20px}.history-entry time{grid-column:1/-1}.history-note{padding:17px 20px}}
 @media(max-width:460px){.history-entry{grid-template-columns:1fr}.history-values{text-align:left}}

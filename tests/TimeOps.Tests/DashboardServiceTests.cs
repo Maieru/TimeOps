@@ -78,19 +78,40 @@ public sealed class DashboardServiceTests
         Assert.False(service.HasConnection);
     }
 
-    [Fact]
-    public async Task Historico_consulta_as_ultimas_24_horas_exatas()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(30)]
+    public async Task Historico_consulta_o_periodo_selecionado_exato(int days)
     {
         var now = new DateTimeOffset(2026, 9, 27, 15, 30, 0, TimeSpan.Zero);
         var gateway = new FakeGateway();
         var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), new FixedClock(now), "America/Sao_Paulo");
         var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", null, null);
 
-        var result = await service.GetLastDayEffortHistoryAsync("project", "team", sprint);
+        var result = await service.GetEffortHistoryAsync("project", "team", sprint, days);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(now.AddHours(-24), gateway.HistoryFrom);
+        Assert.Equal(now.AddDays(-days), gateway.HistoryFrom);
         Assert.Equal(now, gateway.HistoryTo);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(2)]
+    [InlineData(31)]
+    public async Task Historico_rejeita_periodos_invalidos_sem_consultar_gateway(int days)
+    {
+        var gateway = new FakeGateway();
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), TimeProvider.System, "America/Sao_Paulo");
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", null, null);
+
+        var result = await service.GetEffortHistoryAsync("project", "team", sprint, days);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("history.window", result.Error!.Code);
+        Assert.Null(gateway.HistoryFrom);
     }
 
     private sealed class FakeGateway : IDevOpsGateway

@@ -250,13 +250,23 @@ else
     }
     else
     {
-        <section class="history-panel" aria-label="Histórico de alterações nas horas">
+        <section class="history-panel" aria-label="Histórico de alterações de tarefas" aria-busy="@(busy ? "true" : "false")">
             <div class="history-heading">
-                <div><h2>Alterações nas últimas 24 horas</h2><p>Tasks que estão nesta sprint e no escopo da equipe. A pessoa indicada é quem alterou o item no Azure DevOps.</p></div>
+                <div><h2>Alterações de tarefas</h2><p>Alterações nas horas das Tasks que estão nesta sprint e no escopo da equipe. A pessoa indicada é quem alterou o item no Azure DevOps.</p></div>
+                <div class="history-controls">
+                    <div class="field">
+                        <label for="history-period">Período</label>
+                        <select id="history-period" value="@historyDays" @onchange="OnHistoryPeriodChanged" disabled="@busy">
+                            <option value="1">24 horas</option>
+                            <option value="7">7 dias</option>
+                            <option value="30">30 dias</option>
+                        </select>
+                    </div>
                 @if (history is not null)
                 {
                     <span>Coletado em @Service.LocalTime(history.CollectedAt).ToString("dd/MM 'às' HH:mm", Pt)</span>
                 }
+                </div>
             </div>
             @if (history is null)
             {
@@ -322,6 +332,7 @@ else
     private bool savedConnectionNeedsRemoval;
     private Dashboard? dashboard;
     private EffortHistory? history;
+    private int historyDays = 1;
     private string? error;
     private string errorTitle = "Não foi possível atualizar.";
     private bool busy;
@@ -331,7 +342,7 @@ else
     private string ViewTitle => viewMode switch
     {
         DashboardView.Person => "Pessoa",
-        DashboardView.History => "Histórico 24 h",
+        DashboardView.History => "Histórico de alterações de tarefas",
         _ => "Equipe"
     };
     private string ViewSubtitle => viewMode switch
@@ -359,6 +370,14 @@ else
         });
     }
 
+    private async Task OnHistoryPeriodChanged(ChangeEventArgs args)
+    {
+        if (busy || !int.TryParse(args.Value?.ToString(), out var days) || days is not (1 or 7 or 30) || days == historyDays) return;
+        historyDays = days;
+        history = null;
+        await LoadHistory();
+    }
+
     private async Task LoadHistory()
     {
         var sprint = sprints.FirstOrDefault(item => item.Id == sprintId);
@@ -367,7 +386,7 @@ else
         error = null;
         try
         {
-            var result = await Service.GetLastDayEffortHistoryAsync(projectId, teamId, sprint);
+            var result = await Service.GetEffortHistoryAsync(projectId, teamId, sprint, historyDays);
             if (result.IsFailure)
             {
                 history = null;
