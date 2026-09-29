@@ -14,7 +14,7 @@ public sealed record EffortFields(bool Completed, bool Original, bool Remaining)
 public sealed record TaskWork(
     int Id, string Title, Person? Assignee, string State, string StateCategory,
     string AreaPath, string IterationPath, decimal? Completed, decimal? Original,
-    decimal? Remaining, string Url, int? ParentId = null);
+    decimal? Remaining, string Url, int? ParentId = null, int? Revision = null, DateTimeOffset? ChangedAt = null);
 
 public sealed record ParentWorkItem(int Id, string Title, string Type, int? ParentId, string Url);
 public sealed record StoryEffort(ParentWorkItem? Story, IReadOnlyList<TaskWork> Tasks, decimal? Completed);

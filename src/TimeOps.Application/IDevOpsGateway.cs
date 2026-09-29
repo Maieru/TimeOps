@@ -10,4 +10,7 @@ public interface IDevOpsGateway
     Task<Result<SprintSnapshot>> LoadSnapshotAsync(string projectId, string teamId, Sprint sprint, bool forceRefresh, CancellationToken cancellationToken);
     Task<Result<EffortHistory>> LoadEffortHistoryAsync(string projectId, string teamId, Sprint sprint,
         DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
+    Task<Result<EffortHistory>> LoadBurndownHistoryAsync(string projectId, string teamId, SprintSnapshot snapshot,
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        => LoadEffortHistoryAsync(projectId, teamId, snapshot.Sprint, from, to, cancellationToken);
 }

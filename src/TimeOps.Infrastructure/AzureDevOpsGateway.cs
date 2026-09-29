@@ -18,7 +18,7 @@ public sealed partial class AzureDevOpsGateway(
 {
     private const string Version = "api-version=7.1";
     private static readonly string[] EffortNames = ["Microsoft.VSTS.Scheduling.CompletedWork", "Microsoft.VSTS.Scheduling.OriginalEstimate", "Microsoft.VSTS.Scheduling.RemainingWork"];
-    private static readonly string[] BaseFields = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.AreaPath", "System.IterationPath", "System.AssignedTo", "System.Parent"];
+    private static readonly string[] BaseFields = ["System.Id", "System.Title", "System.WorkItemType", "System.State", "System.AreaPath", "System.IterationPath", "System.AssignedTo", "System.Parent", "System.ChangedDate"];
 
     public async Task<Result<IReadOnlyList<NamedItem>>> ListProjectsAsync(CancellationToken cancellationToken)
     {
@@ -65,18 +65,19 @@ public sealed partial class AzureDevOpsGateway(
 
         var path = TeamPath(projectId, teamId);
         var iterationPath = $"{path}/_apis/work/teamsettings/iterations/{Segment(sprint.Id)}";
-        var settings = await SendAsync(HttpMethod.Get, $"{path}/_apis/work/teamsettings?{Version}", null, cancellationToken);
-        if (settings.IsFailure) return Result<SprintSnapshot>.Failure(settings.Error!);
-        var capacity = await SendAsync(HttpMethod.Get, $"{iterationPath}/capacities?{Version}", null, cancellationToken);
-        if (capacity.IsFailure) return Result<SprintSnapshot>.Failure(capacity.Error!);
-        var daysOff = await SendAsync(HttpMethod.Get, $"{iterationPath}/teamdaysoff?{Version}", null, cancellationToken);
-        if (daysOff.IsFailure) return Result<SprintSnapshot>.Failure(daysOff.Error!);
-        var areas = await SendAsync(HttpMethod.Get, $"{path}/_apis/work/teamsettings/teamfieldvalues?{Version}", null, cancellationToken);
-        if (areas.IsFailure) return Result<SprintSnapshot>.Failure(areas.Error!);
-        var type = await SendAsync(HttpMethod.Get, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemtypes/Task?{Version}", null, cancellationToken);
-        if (type.IsFailure) return Result<SprintSnapshot>.Failure(type.Error!);
-        var states = await SendAsync(HttpMethod.Get, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemtypes/Task/states?{Version}", null, cancellationToken);
-        if (states.IsFailure) return Result<SprintSnapshot>.Failure(states.Error!);
+        var metadata = await Task.WhenAll(new[]
+        {
+            $"{path}/_apis/work/teamsettings?{Version}",
+            $"{iterationPath}/capacities?{Version}",
+            $"{iterationPath}/teamdaysoff?{Version}",
+            $"{path}/_apis/work/teamsettings/teamfieldvalues?{Version}",
+            $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemtypes/Task?{Version}",
+            $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemtypes/Task/states?{Version}"
+        }.Select(endpoint => SendAsync(HttpMethod.Get, endpoint, null, cancellationToken)));
+        foreach (var response in metadata)
+            if (response.IsFailure) return Result<SprintSnapshot>.Failure(response.Error!);
+        var (settings, capacity, daysOff, areas, type, states) =
+            (metadata[0], metadata[1], metadata[2], metadata[3], metadata[4], metadata[5]);
 
         var calendarResult = ParseCalendar(settings.Value.Data, daysOff.Value.Data);
         if (calendarResult.IsFailure) return Result<SprintSnapshot>.Failure(calendarResult.Error!);
@@ -246,7 +247,9 @@ public sealed partial class AzureDevOpsGateway(
         return Result<TaskWork?>.Success(new(id.Value, title, person, state, category, area, iteration,
             Decimal(fields, EffortNames[0]), Decimal(fields, EffortNames[1]), Decimal(fields, EffortNames[2]),
             $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}",
-            Int(fields, "System.Parent")));
+            Int(fields, "System.Parent"), Int(item, "rev"),
+            DateTimeOffset.TryParse(String(fields, "System.ChangedDate"), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var changedAt) ? changedAt : null));
     }
 
     private static Result<TeamCalendar> ParseCalendar(JsonElement settings, JsonElement daysOff)

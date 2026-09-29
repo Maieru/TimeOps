@@ -1,6 +1,6 @@
 namespace TimeOps.Web.Components;
 
-public enum DashboardView { Team, Person, Features, History }
+public enum DashboardView { Team, Person, Features, History, Burndown }
 
 // Shared by the interactive layout and the dashboard within one browser circuit.
 public sealed class DashboardNavigationState

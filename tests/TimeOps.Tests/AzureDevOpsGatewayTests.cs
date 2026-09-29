@@ -1,4 +1,5 @@
 using System.Net;
+using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,6 +11,27 @@ namespace TimeOps.Tests;
 
 public sealed class AzureDevOpsGatewayTests
 {
+    [Fact]
+    public async Task Consulta_as_seis_configuracoes_independentes_em_paralelo()
+    {
+        var allStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = 0;
+        var handler = new FixtureHandler
+        {
+            BeforeMetadata = async token =>
+            {
+                if (Interlocked.Increment(ref started) == 6) allStarted.TrySetResult();
+                await allStarted.Task.WaitAsync(token);
+            }
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+        var result = await Create(handler).LoadSnapshotAsync("p1", "t1", sprint, false, timeout.Token);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(6, started);
+    }
+
     [Fact]
     public async Task Carrega_snapshot_e_deduplica_tasks_em_lotes()
     {
@@ -24,6 +46,9 @@ public sealed class AzureDevOpsGatewayTests
         Assert.Equal("person-1", result.Value.Tasks[0].Assignee!.Id);
         Assert.Equal(64, result.Value.Tasks[0].Completed);
         Assert.True(result.Value.Fields.Completed);
+        Assert.Equal(3, result.Value.Tasks[0].Revision);
+        Assert.Equal(new DateTimeOffset(2026, 9, 20, 12, 0, 0, TimeSpan.Zero), result.Value.Tasks[0].ChangedAt);
+        Assert.Contains("System.ChangedDate", handler.Bodies["workitemsbatch"]);
         Assert.Equal(2, result.Value.Calendar.DaysOff.Count);
         Assert.Contains(handler.Requests, request => request.Contains("workitemsbatch"));
         Assert.Contains(handler.Requests, request => request.Contains("wiql"));
@@ -169,14 +194,17 @@ public sealed class AzureDevOpsGatewayTests
         public bool Hierarchy { get; init; }
         public bool IncompleteParents { get; init; }
         public bool PagedTeams { get; init; }
-        public List<string> Requests { get; } = [];
-        public Dictionary<string, string> Bodies { get; } = [];
+        public Func<CancellationToken, Task>? BeforeMetadata { get; init; }
+        public ConcurrentQueue<string> Requests { get; } = new();
+        public ConcurrentDictionary<string, string> Bodies { get; } = new();
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Requests.Add(request.RequestUri!.ToString());
+            Requests.Enqueue(request.RequestUri!.ToString());
             Assert.Equal("Basic", request.Headers.Authorization!.Scheme);
             Assert.Equal(":test-pat", Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers.Authorization.Parameter!)));
             var path = request.RequestUri.AbsolutePath;
+            if (BeforeMetadata is not null && request.Method == HttpMethod.Get)
+                await BeforeMetadata(cancellationToken);
             if (request.Content is not null)
                 Bodies[path.Split('/')[^1]] = await request.Content.ReadAsStringAsync(cancellationToken);
             if (PagedTeams && path.EndsWith("/teams", StringComparison.Ordinal))
@@ -215,7 +243,7 @@ public sealed class AzureDevOpsGatewayTests
             }
             return Hierarchy
                 ? """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.Parent":10,"System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}"""
-                : """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}""";
+                : """{"value":[{"id":5,"rev":3,"fields":{"System.Id":5,"System.Title":"Implementar","System.ChangedDate":"2026-09-20T12:00:00Z","System.WorkItemType":"Task","System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}""";
         }
     }
 }

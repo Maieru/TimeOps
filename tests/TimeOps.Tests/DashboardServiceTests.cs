@@ -114,12 +114,62 @@ public sealed class DashboardServiceTests
         Assert.Null(gateway.HistoryFrom);
     }
 
+    [Fact]
+    public async Task Burndown_consulta_desde_meia_noite_local_e_ancora_no_snapshot_mesmo_acima_de_30_dias()
+    {
+        var collectedAt = new DateTimeOffset(2026, 9, 27, 15, 0, 0, TimeSpan.Zero);
+        var gateway = new FakeGateway { SnapshotCollectedAt = collectedAt };
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(),
+            new FixedClock(collectedAt.AddHours(2)), "America/Sao_Paulo");
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 8, 20), new(2026, 9, 30));
+
+        var result = await service.GetBurndownAsync("project", "team", sprint);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(new DateTimeOffset(2026, 8, 20, 3, 0, 0, TimeSpan.Zero), gateway.HistoryFrom);
+        Assert.Equal(collectedAt, gateway.HistoryTo);
+        Assert.NotNull(gateway.BurndownSnapshot);
+        Assert.Equal(sprint, gateway.BurndownSnapshot.Sprint);
+        Assert.Equal(collectedAt, gateway.BurndownSnapshot.CollectedAt);
+        Assert.Equal(collectedAt, result.Value.CollectedAt);
+    }
+
+    [Fact]
+    public async Task Burndown_rejeita_contexto_e_datas_invalidas_e_propaga_falhas()
+    {
+        var gateway = new FakeGateway { Fail = true };
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), TimeProvider.System, "America/Sao_Paulo");
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 21), new(2026, 9, 25));
+
+        Assert.Equal("context.invalid", (await service.GetBurndownAsync("", "team", sprint)).Error!.Code);
+        Assert.Equal("sprint.dates", (await service.GetBurndownAsync("project", "team", sprint with { End = null })).Error!.Code);
+        Assert.Equal("devops.incomplete", (await service.GetBurndownAsync("project", "team", sprint)).Error!.Code);
+        Assert.Null(gateway.HistoryFrom);
+    }
+
+    [Fact]
+    public async Task Burndown_nao_consulta_historico_antes_do_inicio()
+    {
+        var collectedAt = new DateTimeOffset(2026, 9, 20, 15, 0, 0, TimeSpan.Zero);
+        var gateway = new FakeGateway { SnapshotCollectedAt = collectedAt };
+        var service = new DashboardService(gateway, new FakeConnection(), new FakeStore(), new FixedClock(collectedAt), "America/Sao_Paulo");
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 21), new(2026, 9, 25));
+
+        var result = await service.GetBurndownAsync("project", "team", sprint);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(gateway.HistoryFrom);
+        Assert.All(result.Value.Points, point => Assert.Null(point.Remaining));
+    }
+
     private sealed class FakeGateway : IDevOpsGateway
     {
         public bool Fail { get; init; }
+        public DateTimeOffset SnapshotCollectedAt { get; init; } = DateTimeOffset.UtcNow;
         public bool Forced { get; private set; }
         public DateTimeOffset? HistoryFrom { get; private set; }
         public DateTimeOffset? HistoryTo { get; private set; }
+        public SprintSnapshot? BurndownSnapshot { get; private set; }
         public Task<Result<IReadOnlyList<NamedItem>>> ListProjectsAsync(CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<NamedItem>>.Success([]));
         public Task<Result<IReadOnlyList<NamedItem>>> ListTeamsAsync(string projectId, CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<NamedItem>>.Success([]));
         public Task<Result<IReadOnlyList<Sprint>>> ListSprintsAsync(string projectId, string teamId, CancellationToken cancellationToken) => Task.FromResult(Result<IReadOnlyList<Sprint>>.Success([]));
@@ -129,6 +179,12 @@ public sealed class DashboardServiceTests
             HistoryTo = to;
             return Task.FromResult(Result<EffortHistory>.Success(new(from, to, to, [])));
         }
+        public Task<Result<EffortHistory>> LoadBurndownHistoryAsync(string projectId, string teamId, SprintSnapshot snapshot,
+            DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        {
+            BurndownSnapshot = snapshot;
+            return LoadEffortHistoryAsync(projectId, teamId, snapshot.Sprint, from, to, cancellationToken);
+        }
         public Task<Result<SprintSnapshot>> LoadSnapshotAsync(string projectId, string teamId, Sprint sprint, bool forceRefresh, CancellationToken cancellationToken)
         {
             Forced = forceRefresh;
@@ -136,7 +192,7 @@ public sealed class DashboardServiceTests
             var person = new Person("id", "Ana");
             var snapshot = new SprintSnapshot(sprint,
                 new(new HashSet<DayOfWeek> { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday }, []),
-                [new(person, [8], [])], [], new(true, true, true), DateTimeOffset.UtcNow);
+                [new(person, [8], [])], [], new(true, true, true), SnapshotCollectedAt);
             return Task.FromResult(Result<SprintSnapshot>.Success(snapshot));
         }
     }

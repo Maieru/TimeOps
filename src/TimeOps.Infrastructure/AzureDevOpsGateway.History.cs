@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using TimeOps.Domain;
 
 namespace TimeOps.Infrastructure;
@@ -53,15 +54,50 @@ public sealed partial class AzureDevOpsGateway
         var tasks = await LoadHistoryTasksAsync(projectId, sprint, areas.Value, ids, cancellationToken);
         if (tasks.IsFailure) return Result<EffortHistory>.Failure(tasks.Error!);
 
-        var changes = new List<EffortChange>();
-        foreach (var group in tasks.Value.Chunk(4))
+        return await ReadHistoryAsync(projectId, tasks.Value, from, to, cancellationToken);
+    }
+
+    public async Task<Result<EffortHistory>> LoadBurndownHistoryAsync(string projectId, string teamId, SprintSnapshot snapshot,
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    {
+        var config = ValidateConfig();
+        if (config.IsFailure) return Result<EffortHistory>.Failure(config.Error!);
+        if (to <= from) return Result<EffortHistory>.Failure(new("history.window", ErrorCategory.Validation, "O período do histórico é inválido."));
+        cancellationToken.ThrowIfCancellationRequested();
+        // The snapshot already contains the verified scope, revisions and current values.
+        // A refreshed snapshot or a new connection gets a separate entry, even with the same clock time.
+        var key = ("burndown-history", connection.CachePartition, projectId, teamId, snapshot, from, to);
+        if (cache.TryGetValue(key, out EffortHistory? cached) && cached is not null)
+            return Result<EffortHistory>.Success(cached);
+        var tasks = snapshot.Tasks.Where(task => task.ChangedAt is null || task.ChangedAt >= from)
+            .Select(task => new HistoryTask(task.Id, task.Title, task.Url, task.Revision)).ToArray();
+        if (tasks.Length > MaxChangedTasks)
+            return Incomplete<EffortHistory>("Mais de 1.000 Tasks mudaram neste período. O histórico não foi exibido como se estivesse completo.");
+        var result = await ReadHistoryAsync(projectId, tasks, from, to, cancellationToken, remainingOnly: true);
+        if (result.IsSuccess) cache.Set(key, result.Value, TimeSpan.FromMinutes(5));
+        return result;
+    }
+
+    private async Task<Result<EffortHistory>> ReadHistoryAsync(string projectId, IReadOnlyList<HistoryTask> tasks,
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, bool remainingOnly = false)
+    {
+        var results = new Result<IReadOnlyList<EffortChange>>[tasks.Count];
+        Error? failure = null;
+        await Parallel.ForEachAsync(Enumerable.Range(0, tasks.Count), new ParallelOptions
         {
-            var results = await Task.WhenAll(group.Select(task => LoadTaskUpdatesAsync(projectId, task, from, to, cancellationToken)));
-            foreach (var result in results)
-            {
-                if (result.IsFailure) return Result<EffortHistory>.Failure(result.Error!);
-                changes.AddRange(result.Value);
-            }
+            MaxDegreeOfParallelism = 8,
+            CancellationToken = cancellationToken
+        }, async (index, token) =>
+        {
+            if (Volatile.Read(ref failure) is not null) return;
+            results[index] = await LoadTaskUpdatesAsync(projectId, tasks[index], from, to, token, remainingOnly);
+            if (results[index].IsFailure) Interlocked.CompareExchange(ref failure, results[index].Error!, null);
+        });
+        if (failure is not null) return Result<EffortHistory>.Failure(failure);
+        var changes = new List<EffortChange>();
+        foreach (var result in results)
+        {
+            changes.AddRange(result.Value);
         }
 
         return Result<EffortHistory>.Success(new(from, to, clock.GetUtcNow(), changes
@@ -94,7 +130,7 @@ public sealed partial class AzureDevOpsGateway
                     || !string.Equals(iteration, sprint.Path, StringComparison.OrdinalIgnoreCase)
                     || area is null || !areas.Any(rule => rule.Matches(area)))
                     return Incomplete<IReadOnlyList<HistoryTask>>("Uma Task mudou de tipo, área ou sprint durante a consulta do histórico. Atualize novamente.");
-                tasks.Add(new(id.Value, title, $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}"));
+                tasks.Add(new(id.Value, title, $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}", Int(item, "rev")));
             }
         }
         return tasks.Select(task => task.Id).Distinct().Count() == ids.Count
@@ -103,56 +139,77 @@ public sealed partial class AzureDevOpsGateway
     }
 
     private async Task<Result<IReadOnlyList<EffortChange>>> LoadTaskUpdatesAsync(string projectId, HistoryTask task,
-        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, bool remainingOnly = false)
     {
+        var updates = await LoadEffortUpdatesAsync(projectId, task, cancellationToken);
+        if (updates.IsFailure) return Result<IReadOnlyList<EffortChange>>.Failure(updates.Error!);
         var changes = new List<EffortChange>();
+        foreach (var update in updates.Value)
+        {
+            var fields = Property(update, "fields");
+            if (remainingOnly && Property(fields, "Microsoft.VSTS.Scheduling.RemainingWork").ValueKind == JsonValueKind.Undefined) continue;
+            var dateText = String(Property(fields, "System.ChangedDate"), "newValue")
+                ?? String(Property(fields, "System.AuthorizedDate"), "newValue");
+            if (dateText is null || !DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal, out var changedAt))
+                return Incomplete<IReadOnlyList<EffortChange>>("Uma alteração de horas não trouxe a data em que a Task foi modificada.");
+            if (changedAt < from || changedAt > to) continue;
+
+            var revisedBy = Property(update, "revisedBy");
+            var actorName = String(revisedBy, "displayName");
+            var actorId = IdentityId(revisedBy);
+            var actor = actorName is null ? null : new Person(actorId ?? actorName, actorName);
+            foreach (var (fieldName, fieldKind) in HistoryFields)
+            {
+                if (remainingOnly && fieldKind != EffortField.Remaining) continue;
+                var field = Property(fields, fieldName);
+                if (field.ValueKind == JsonValueKind.Undefined) continue;
+                if (field.ValueKind != JsonValueKind.Object
+                    || !TryHours(Property(field, "oldValue"), out var before)
+                    || !TryHours(Property(field, "newValue"), out var after))
+                    return Incomplete<IReadOnlyList<EffortChange>>("Uma alteração de horas retornou valores inválidos.");
+                if (before != after)
+                    changes.Add(new(task.Id, task.Title, task.Url, Int(update, "id")!.Value, changedAt, actor, fieldKind, before, after));
+            }
+        }
+        return Result<IReadOnlyList<EffortChange>>.Success(changes);
+    }
+
+    private async Task<Result<IReadOnlyList<JsonElement>>> LoadEffortUpdatesAsync(string projectId, HistoryTask task,
+        CancellationToken cancellationToken)
+    {
+        // Check the current revision in the batch before reusing updates, including across time windows.
+        var key = $"effort-updates:{connection.CachePartition}:{projectId}:{task.Id}:{task.Revision}";
+        if (task.Revision is > 0 && cache.TryGetValue(key, out IReadOnlyList<JsonElement>? cached) && cached is not null)
+            return Result<IReadOnlyList<JsonElement>>.Success(cached);
+        var effortUpdates = new List<JsonElement>();
         var seen = new HashSet<int>();
         for (var skip = 0; ; skip += HistoryPageSize)
         {
             var response = await SendAsync(HttpMethod.Get,
                 $"{OrgPath}/{Segment(projectId)}/_apis/wit/workItems/{task.Id}/updates?$top={HistoryPageSize}&$skip={skip}&{Version}", null, cancellationToken);
-            if (response.IsFailure) return Result<IReadOnlyList<EffortChange>>.Failure(response.Error!);
+            if (response.IsFailure) return Result<IReadOnlyList<JsonElement>>.Failure(response.Error!);
             if (!TryArray(response.Value.Data, "value", out var updates) || updates.GetArrayLength() > HistoryPageSize)
-                return Incomplete<IReadOnlyList<EffortChange>>("O histórico de uma Task retornou uma página inválida.");
+                return Incomplete<IReadOnlyList<JsonElement>>("O histórico de uma Task retornou uma página inválida.");
 
             foreach (var update in updates.EnumerateArray())
             {
                 var updateId = Int(update, "id");
                 var workItemId = Int(update, "workItemId");
                 if (updateId is null || workItemId != task.Id || !seen.Add(updateId.Value))
-                    return Incomplete<IReadOnlyList<EffortChange>>("Uma atualização de Task retornou dados incompletos ou repetidos.");
+                    return Incomplete<IReadOnlyList<JsonElement>>("Uma atualização de Task retornou dados incompletos ou repetidos.");
 
                 var fields = Property(update, "fields");
                 if (!HistoryFields.Any(field => Property(fields, field.Name).ValueKind != JsonValueKind.Undefined)) continue;
-                var dateText = String(Property(fields, "System.ChangedDate"), "newValue")
-                    ?? String(Property(fields, "System.AuthorizedDate"), "newValue");
-                if (dateText is null || !DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal, out var changedAt))
-                    return Incomplete<IReadOnlyList<EffortChange>>("Uma alteração de horas não trouxe a data em que a Task foi modificada.");
-                if (changedAt < from || changedAt > to) continue;
-
-                var revisedBy = Property(update, "revisedBy");
-                var actorName = String(revisedBy, "displayName");
-                var actorId = IdentityId(revisedBy);
-                var actor = actorName is null ? null : new Person(actorId ?? actorName, actorName);
-                foreach (var (fieldName, fieldKind) in HistoryFields)
-                {
-                    var field = Property(fields, fieldName);
-                    if (field.ValueKind == JsonValueKind.Undefined) continue;
-                    if (field.ValueKind != JsonValueKind.Object
-                        || !TryHours(Property(field, "oldValue"), out var before)
-                        || !TryHours(Property(field, "newValue"), out var after))
-                        return Incomplete<IReadOnlyList<EffortChange>>("Uma alteração de horas retornou valores inválidos.");
-                    if (before != after)
-                        changes.Add(new(task.Id, task.Title, task.Url, updateId.Value, changedAt, actor, fieldKind, before, after));
-                }
+                effortUpdates.Add(update.Clone());
             }
 
             if (updates.GetArrayLength() < HistoryPageSize) break;
             if (skip >= 10000)
-                return Incomplete<IReadOnlyList<EffortChange>>("Uma Task excedeu o limite de atualizações para esta consulta. O histórico está indisponível.");
+                return Incomplete<IReadOnlyList<JsonElement>>("Uma Task excedeu o limite de atualizações para esta consulta. O histórico está indisponível.");
         }
-        return Result<IReadOnlyList<EffortChange>>.Success(changes);
+        if (task.Revision is > 0) cache.Set(key, (IReadOnlyList<JsonElement>)effortUpdates, TimeSpan.FromMinutes(5));
+        return Result<IReadOnlyList<JsonElement>>.Success(effortUpdates);
     }
 
     private static bool TryHours(JsonElement value, out decimal? hours)
@@ -164,5 +221,5 @@ public sealed partial class AzureDevOpsGateway
         return true;
     }
 
-    private sealed record HistoryTask(int Id, string Title, string Url);
+    private sealed record HistoryTask(int Id, string Title, string Url, int? Revision);
 }

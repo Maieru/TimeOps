@@ -22,7 +22,7 @@ O painel combina a capacidade diária, o calendário e as folgas cadastrados no 
 
 O usuário abre o aplicativo em um host estático ou em localhost, informa a organização e um PAT de leitura durante a execução, seleciona projeto, equipe e sprint e consulta o painel. A sprint atual é selecionada automaticamente quando há uma única correspondência. A referência de capacidade é ontem por padrão e pode ser alterada até hoje. O usuário pode atualizar os dados manualmente e abrir as Tasks para conferir seus campos e links no DevOps.
 
-O resultado é um retrato dos work items no momento da consulta. A data de referência altera a capacidade calculada, mas não reconstrói os valores históricos de `Completed Work` nem distribui horas entre responsáveis anteriores.
+As métricas principais são um retrato dos work items no momento da consulta. A data de referência altera a capacidade calculada, mas não reconstrói os valores históricos de `Completed Work` nem distribui horas entre responsáveis anteriores. O burndown tem uma curva própria, ancorada à coleta: mudar a referência de capacidade não altera seus valores diários.
 
 ## Capabilities and Constraints
 
@@ -30,9 +30,11 @@ O resultado é um retrato dos work items no momento da consulta. A data de refer
 - O aplicativo usa C#/.NET 10 e Blazor WebAssembly standalone, sem banco de dados e sem login próprio. O PAT fica na memória da aba e, opcionalmente, no localStorage do perfil do navegador. As consultas diretas ao DevOps dependem de CORS.
 - A arquitetura segue Clean Architecture em quatro projetos e usa Result pattern em todas as camadas.
 - Os cálculos usam horas decimais. A capacidade esperada soma atividades por dia elegível e desconta folgas; não assume oito horas quando a capacidade está ausente.
-- `Completed Work`, `Original Estimate` e `Remaining Work` são métricas distintas. Campos vazios contribuem com zero e geram aviso; campos indisponíveis e consultas incompletas não devem parecer totais válidos.
+- `Completed Work`, `Original Estimate` e `Remaining Work` são métricas distintas. Nas métricas atuais, campos vazios contribuem com zero e geram aviso; campos indisponíveis e consultas incompletas não devem parecer totais válidos. O burndown considera `Remaining Work` vazio nas Tasks como zero e gera um aviso, sem impedir a exibição da curva. O campo precisa estar disponível no processo. Campos vazios em revisões anteriores contam como zero.
 - A interface apresenta métricas por pessoa e equipe, Tasks de cada soma, contagem por categoria de estado e avisos de qualidade dos dados.
-- Não há escrita no DevOps, reconstrução histórica, consolidação entre equipes, notificações ou exportação no piloto.
+- O histórico mostra diferenças entre revisões dos campos de esforço. O burndown reconstrói o `Remaining Work` desde a abertura da sprint somente para as Tasks que estão atualmente na sprint e na área da equipe; entradas e saídas desse escopo não são reconstruídas.
+- O burndown compara o restante diário com uma linha ideal que desconta dias não úteis e folgas da equipe. Há um ponto de abertura e valores de fim de dia; o dia da coleta é parcial e os valores reais futuros ficam ausentes. O gráfico SVG e a tabela diária expansível compartilham os mesmos valores e usam rolagem interna em telas pequenas.
+- Não há escrita no DevOps, reconstrução histórica do escopo ou dos responsáveis, consolidação entre equipes, notificações ou exportação no piloto.
 
 ## Brand Commitments
 

@@ -23,6 +23,10 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.4 2"/></svg>
                 <span>Histórico de tarefas</span>
             </button>
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.Burndown ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Burndown ? "true" : "false")" @onclick="() => SelectView(DashboardView.Burndown)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16M7 7l4 4 4-1 5 7M7 6l13 12"/></svg>
+                <span>Burndown da iteração</span>
+            </button>
         </nav>
         <div class="sidebar-context" aria-label="Contexto selecionado">
             <span>Contexto atual</span>

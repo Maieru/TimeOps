@@ -60,6 +60,33 @@ public sealed class DashboardService(IDevOpsGateway gateway, IRuntimeConnection 
         return gateway.LoadEffortHistoryAsync(projectId, teamId, sprint, to.AddDays(-days), to, cancellationToken);
     }
 
+    public async Task<Result<Burndown>> GetBurndownAsync(string projectId, string teamId, Sprint sprint,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(teamId) || string.IsNullOrWhiteSpace(sprint.Id))
+            return Result<Burndown>.Failure(new("context.invalid", ErrorCategory.Validation, "Selecione projeto, equipe e sprint."));
+        if (sprint.Start is not { } start || sprint.End is null || sprint.End < start)
+            return Result<Burndown>.Failure(new("sprint.dates", ErrorCategory.Incomplete, "A sprint precisa ter datas válidas para exibir o burndown."));
+
+        TimeZoneInfo timeZone;
+        try { timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
+        catch (TimeZoneNotFoundException)
+        {
+            return Result<Burndown>.Failure(new("timezone.invalid", ErrorCategory.Validation, "O fuso configurado não é válido."));
+        }
+        var snapshot = await gateway.LoadSnapshotAsync(projectId, teamId, sprint, false, cancellationToken);
+        if (snapshot.IsFailure) return Result<Burndown>.Failure(snapshot.Error!);
+        // Anchor the reconstruction to the snapshot, even when it came from cache.
+        var midnight = start.ToDateTime(TimeOnly.MinValue);
+        var from = new DateTimeOffset(midnight, timeZone.GetUtcOffset(midnight));
+        var to = snapshot.Value.CollectedAt;
+        if (to <= from)
+            return BurndownCalculator.Calculate(snapshot.Value, new(from, from, to, []), timeZone);
+        var history = await gateway.LoadBurndownHistoryAsync(projectId, teamId, snapshot.Value, from, to, cancellationToken);
+        return history.IsFailure ? Result<Burndown>.Failure(history.Error!)
+            : BurndownCalculator.Calculate(snapshot.Value, history.Value, timeZone);
+    }
+
     public async Task<Result<Dashboard>> GetDashboardAsync(string projectId, string teamId, Sprint sprint,
         DateOnly? referenceDate, bool forceRefresh = false, CancellationToken cancellationToken = default)
     {
