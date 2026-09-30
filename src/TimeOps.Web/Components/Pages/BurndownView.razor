@@ -21,16 +21,20 @@
     }
     else if (data is not null)
     {
+        <div class="burndown-report">
         <div class="burndown-heading">
             <div><h2>Trabalho restante</h2><p>Horas em Remaining Work, comparadas à redução ideal nos dias úteis da equipe.</p></div>
-            <span>Coleta: @Service.LocalTime(data.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</span>
+            <span class="burndown-collected"><i aria-hidden="true"></i>Coleta: <time datetime="@data.CollectedAt.ToString("O")">@Service.LocalTime(data.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</time></span>
         </div>
         <dl class="burndown-totals">
             <div><dt>@(LastActual is null ? "Restante planejado" : "Restante no início")</dt><dd>@Hours(data.InitialRemaining)</dd></div>
-            <div><dt>@(AfterEnd ? "Restante no encerramento" : "Último valor observado")</dt><dd>@Hours(LastActual?.Remaining)</dd></div>
+            <div class="burndown-total-real"><dt>@(AfterEnd ? "Restante no encerramento" : "Último valor observado")</dt><dd>@Hours(LastActual?.Remaining)</dd></div>
             <div><dt>Diferença para o ideal <MetricInfo Title="Diferença para o ideal" Description="Trabalho restante real menos o ideal na mesma data. Um valor positivo indica mais horas restantes que a linha ideal. O dia da coleta é parcial." /></dt><dd>@SignedHours(LastActual?.Remaining - LastActual?.Ideal)</dd></div>
         </dl>
-        <div class="burndown-legend" aria-label="Legenda do gráfico"><span><i class="burndown-real-key"></i>Restante real</span><span><i class="burndown-ideal-key"></i>Linha ideal</span></div>
+        <div class="burndown-chart-toolbar">
+            <div class="burndown-legend" aria-label="Legenda do gráfico"><span><i class="burndown-real-key" aria-hidden="true"></i>Restante real</span><span><i class="burndown-ideal-key" aria-hidden="true"></i>Linha ideal</span></div>
+            <span class="burndown-range">@data.Sprint.Start?.ToString("dd/MM/yyyy") — @data.Sprint.End?.ToString("dd/MM/yyyy")</span>
+        </div>
         <div class="burndown-chart-shell" @ref="chartShell">
           <div class="burndown-chart-scroll" role="region" aria-label="Gráfico de horas restantes; role horizontalmente em telas pequenas" tabindex="0">
             <svg class="burndown-chart" viewBox="0 0 920 340" data-burndown-step="@Number(822m / Math.Max(1, data.Points.Count - 1))" role="group" aria-labelledby="burndown-title burndown-description">
@@ -39,10 +43,11 @@
                 @for (var tick = 0; tick <= 4; tick++)
                 {
                     var value = AxisMax * tick / 4;
-                    <g><line class="burndown-grid" x1="70" y1="@Y(value)" x2="892" y2="@Y(value)" /><text class="burndown-axis" x="58" y="@Number(PlotY(value) + 4)" text-anchor="end">@value.ToString("N0", Pt)</text></g>
+                    <g><line class="burndown-grid @(tick == 0 ? "is-baseline" : "")" x1="70" y1="@Y(value)" x2="892" y2="@Y(value)" /><text class="burndown-axis" x="58" y="@Number(PlotY(value) + 4)" text-anchor="end">@value.ToString("N0", Pt)</text></g>
                 }
                 <text class="burndown-axis" x="70" y="20">Horas restantes</text>
                 <rect class="burndown-plot-hit" x="70" y="42" width="822" height="244" aria-hidden="true" />
+                <polygon class="burndown-area" points="@ActualArea()" aria-hidden="true" />
                 <polyline class="burndown-ideal" points="@Polyline(false)" />
                 <polyline class="burndown-real" points="@Polyline(true)" />
                 <line class="burndown-guide" x1="70" x2="70" y1="42" y2="286" visibility="hidden" aria-hidden="true" />
@@ -51,7 +56,7 @@
                     var point = data.Points[index];
                     if (point.Remaining is { } actual)
                     {
-                        <g class="burndown-point-trigger" data-burndown-index="@index"
+                        <g class="burndown-point-trigger @(index == 0 || ReferenceEquals(point, LastActual) ? "is-endpoint" : "")" data-burndown-index="@index"
                            tabindex="0" role="button" aria-label="@($"{PointDate(point)}: {Hours(actual)} restantes; ideal {Hours(point.Ideal)}")"
                            aria-expanded="false">
                             <ellipse class="burndown-point-hit" cx="@X(index)" cy="@Y(actual)" rx="@Number(Math.Max(4, Math.Min(22, 411m / Math.Max(1, data.Points.Count - 1))))" ry="22" />
@@ -76,6 +81,11 @@
                   }
               }
           </div>
+        </div>
+        <div class="burndown-chart-footer">
+            <span>Mova o cursor pelo gráfico para explorar os valores.</span>
+            <span class="burndown-shortcuts"><span><kbd>Tab</kbd> navegar pelos pontos</span><span><kbd>Esc</kbd> fechar legenda</span></span>
+        </div>
         </div>
         <p class="burndown-note">Mova o mouse pela área do gráfico ou toque para consultar a data mais próxima e seus valores. Use Tab para navegar pelos pontos e Escape para fechar a legenda. O ponto “Início” representa a abertura da iteração; os demais representam o fim de cada dia. O dia da coleta é parcial. Datas futuras não têm valor real. A linha ideal parte das horas restantes no início e desconta os dias úteis, excluindo folgas da equipe.</p>
         <div class="notice warning burndown-warnings" role="note">
@@ -190,6 +200,11 @@
     private string Polyline(bool actual) => string.Join(" ", data!.Points.Select((point, index) => (point, index))
         .Where(item => !actual || item.point.Remaining is not null)
         .Select(item => $"{X(item.index)},{Y(actual ? item.point.Remaining!.Value : item.point.Ideal)}"));
+    private string ActualArea()
+    {
+        var observed = data!.Points.Select((point, index) => (point, index)).Where(item => item.point.Remaining is not null).ToArray();
+        return observed.Length < 2 ? "" : $"{X(observed[0].index)},{Y(0)} {Polyline(true)} {X(observed[^1].index)},{Y(0)}";
+    }
     public async ValueTask DisposeAsync()
     {
         request?.Cancel();
