@@ -28,7 +28,7 @@ As visões de equipe, pessoa, **Features e histórias** e histórico mantêm os 
 
 A visão **Burndown da iteração**, disponível no menu, compara o `Remaining Work` diário com uma linha ideal que parte do restante na abertura da sprint e reduz até zero nos dias úteis, descontando as folgas da equipe. O gráfico SVG tem uma tabela expansível com os mesmos valores; ambos permitem rolagem interna em telas pequenas. O ponto “Início” representa a abertura e os demais representam o fim de cada dia. O dia da coleta é parcial; datas futuras não recebem valor real. Alterar a referência de capacidade não muda a curva, que permanece ancorada à coleta.
 
-As bolinhas do gráfico mostram um popup compacto com data, restante real, linha ideal e diferença ao passar o mouse, clicar ou navegar com Tab. Escape fecha o popup. Seu tamanho em pixels independe da largura do gráfico; em telas pequenas, aparece abaixo da curva para manter todos os valores visíveis.
+A área do gráfico mostra um popup com os valores da data mais próxima ao mover o mouse horizontalmente ou tocar, sem precisar mirar na linha ou nas bolinhas. O popup acompanha o cursor a cada quadro do navegador, sem reconstruir o gráfico, e uma guia vertical identifica a data selecionada. Datas futuras continuam sem valor real. O popup destaca a data, o restante real, a linha ideal e a diferença, com cores correspondentes às séries e indicação de início ou coleta parcial. Tab navega pelos pontos e Escape fecha o popup. Seu tamanho em pixels independe da largura do gráfico; em telas pequenas, aparece abaixo da curva para manter todos os valores visíveis.
 
 O carregamento consulta as seis configurações independentes em paralelo. O histórico mantém até oito leituras de Tasks simultâneas, sem aguardar um grupo inteiro terminar. As revisões de horas ficam em cache na memória da aba por até cinco minutos: a revisão atual de cada Task é conferida antes de reutilizar suas atualizações, inclusive ao mudar o período. O burndown aproveita o escopo e as revisões da coleta do painel, pula Tasks sem mudanças no período e guarda seu histórico calculado para reabrir a mesma coleta sem novas consultas. Uma coleta atualizada ou nova conexão invalida esse resultado; páginas incompletas não entram no cache.
 
@@ -54,6 +54,7 @@ Referências: [Blazor WebAssembly no Pages](https://learn.microsoft.com/en-us/as
 
 ```powershell
 dotnet test tests/TimeOps.Tests/TimeOps.Tests.csproj
+node tests/interaction/burndown-interaction.test.mjs
 python -m unittest discover -s tests/publishing -v
 ```
 

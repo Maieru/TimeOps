@@ -1,8 +1,9 @@
-@implements IDisposable
+@implements IAsyncDisposable
 @using System.Globalization
 @using TimeOps.Domain
 @using TimeOps.Application
 @inject DashboardService Service
+@inject IJSRuntime JS
 
 <section class="burndown-panel" aria-label="Burndown da iteração" aria-busy="@loading.ToString().ToLowerInvariant()">
     @if (loading)
@@ -30,33 +31,29 @@
             <div><dt>Diferença para o ideal <MetricInfo Title="Diferença para o ideal" Description="Trabalho restante real menos o ideal na mesma data. Um valor positivo indica mais horas restantes que a linha ideal. O dia da coleta é parcial." /></dt><dd>@SignedHours(LastActual?.Remaining - LastActual?.Ideal)</dd></div>
         </dl>
         <div class="burndown-legend" aria-label="Legenda do gráfico"><span><i class="burndown-real-key"></i>Restante real</span><span><i class="burndown-ideal-key"></i>Linha ideal</span></div>
-        <div class="burndown-chart-shell" @onpointerleave="OnChartLeave">
+        <div class="burndown-chart-shell" @ref="chartShell">
           <div class="burndown-chart-scroll" role="region" aria-label="Gráfico de horas restantes; role horizontalmente em telas pequenas" tabindex="0">
-            <svg class="burndown-chart" viewBox="0 0 920 340" role="group" aria-labelledby="burndown-title burndown-description" @onclick="DismissTooltip" @onkeydown="OnChartKeyDown">
+            <svg class="burndown-chart" viewBox="0 0 920 340" data-burndown-step="@Number(822m / Math.Max(1, data.Points.Count - 1))" role="group" aria-labelledby="burndown-title burndown-description">
                 <title id="burndown-title">Burndown de @data.Sprint.Name</title>
-                <desc id="burndown-description">Linha contínua: horas restantes reais. Linha tracejada: redução ideal até zero. Passe o mouse, toque ou use Tab nas bolinhas para ver os valores; Escape fecha a legenda. Os mesmos valores estão na tabela Evolução diária abaixo.</desc>
+                <desc id="burndown-description">Linha contínua: horas restantes reais. Linha tracejada: redução ideal até zero. Mova o mouse pela área do gráfico ou toque para consultar a data mais próxima; use Tab para navegar pelos pontos e Escape para fechar a legenda. Os mesmos valores estão na tabela Evolução diária abaixo.</desc>
                 @for (var tick = 0; tick <= 4; tick++)
                 {
                     var value = AxisMax * tick / 4;
                     <g><line class="burndown-grid" x1="70" y1="@Y(value)" x2="892" y2="@Y(value)" /><text class="burndown-axis" x="58" y="@Number(PlotY(value) + 4)" text-anchor="end">@value.ToString("N0", Pt)</text></g>
                 }
                 <text class="burndown-axis" x="70" y="20">Horas restantes</text>
+                <rect class="burndown-plot-hit" x="70" y="42" width="822" height="244" aria-hidden="true" />
                 <polyline class="burndown-ideal" points="@Polyline(false)" />
                 <polyline class="burndown-real" points="@Polyline(true)" />
+                <line class="burndown-guide" x1="70" x2="70" y1="42" y2="286" visibility="hidden" aria-hidden="true" />
                 @for (var index = 0; index < data.Points.Count; index++)
                 {
                     var point = data.Points[index];
-                    var pointIndex = index;
                     if (point.Remaining is { } actual)
                     {
-                        <g class="burndown-point-trigger @(activePointIndex == pointIndex ? "is-active" : "")"
+                        <g class="burndown-point-trigger" data-burndown-index="@index"
                            tabindex="0" role="button" aria-label="@($"{PointDate(point)}: {Hours(actual)} restantes; ideal {Hours(point.Ideal)}")"
-                           aria-expanded="@(activePointIndex == pointIndex ? "true" : "false")"
-                           aria-describedby="@(activePointIndex == pointIndex ? tooltipId : null)"
-                           @onpointerenter="args => OnPointEnter(args, pointIndex)"
-                           @onfocus="() => OnPointFocus(pointIndex)" @onblur="() => OnPointBlur(pointIndex)"
-                           @onclick="() => activePointIndex = pointIndex" @onclick:stopPropagation
-                           @onkeydown="args => OnPointKeyDown(args, pointIndex)">
+                           aria-expanded="false">
                             <ellipse class="burndown-point-hit" cx="@X(index)" cy="@Y(actual)" rx="@Number(Math.Max(4, Math.Min(22, 411m / Math.Max(1, data.Points.Count - 1))))" ry="22" />
                             <circle class="burndown-point" cx="@X(index)" cy="@Y(actual)" r="4" />
                         </g>
@@ -68,14 +65,19 @@
                 }
             </svg>
           </div>
-          @if (activePointIndex is { } active && data.Points[active] is { Remaining: { } remaining } selected)
-          {
-              <div class="burndown-tooltip-anchor" style="@TooltipStyle(active, remaining)">
-                  @PointLegend(selected, tooltipId)
-              </div>
-          }
+          <div class="burndown-tooltip-anchor" hidden>
+              @for (var index = 0; index < data.Points.Count; index++)
+              {
+                  if (data.Points[index].Remaining is not null)
+                  {
+                      <div data-burndown-legend="@index" hidden>
+                          @PointLegend(data.Points[index], $"{tooltipId}-{index}")
+                      </div>
+                  }
+              }
+          </div>
         </div>
-        <p class="burndown-note">Passe o mouse, toque ou use Tab nas bolinhas para ver a data e os valores. Escape fecha a legenda. O ponto “Início” representa a abertura da iteração; os demais representam o fim de cada dia. O dia da coleta é parcial. Datas futuras não têm valor real. A linha ideal parte das horas restantes no início e desconta os dias úteis, excluindo folgas da equipe.</p>
+        <p class="burndown-note">Mova o mouse pela área do gráfico ou toque para consultar a data mais próxima e seus valores. Use Tab para navegar pelos pontos e Escape para fechar a legenda. O ponto “Início” representa a abertura da iteração; os demais representam o fim de cada dia. O dia da coleta é parcial. Datas futuras não têm valor real. A linha ideal parte das horas restantes no início e desconta os dias úteis, excluindo folgas da equipe.</p>
         <div class="notice warning burndown-warnings" role="note">
             @foreach (var warning in data.Warnings) { <p>@warning.Message</p> }
         </div>
@@ -107,8 +109,10 @@
     private Burndown? data;
     private string? error;
     private bool loading;
-    private int? activePointIndex;
-    private int? focusedPointIndex;
+    private ElementReference chartShell;
+    private IJSObjectReference? interactionModule;
+    private IJSObjectReference? chartInteraction;
+    private Burndown? interactiveData;
     private readonly string tooltipId = $"burndown-tooltip-{Guid.NewGuid():N}";
     private BurndownPoint? LastActual => data?.Points.LastOrDefault(point => point.Remaining is not null);
     private bool AfterEnd => data is not null && DateOnly.FromDateTime(Service.LocalTime(data.CollectedAt).DateTime) > data.Sprint.End;
@@ -121,14 +125,27 @@
         await LoadAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ReferenceEquals(interactiveData, data)) return;
+        if (chartInteraction is not null)
+        {
+            await chartInteraction.InvokeVoidAsync("dispose");
+            await chartInteraction.DisposeAsync();
+            chartInteraction = null;
+        }
+        interactiveData = data;
+        if (data is null || data.TaskCount == 0) return;
+        interactionModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./burndown-interaction.mjs");
+        chartInteraction = await interactionModule.InvokeAsync<IJSObjectReference>("attach", chartShell);
+    }
+
     private async Task LoadAsync()
     {
         request?.Cancel();
         request?.Dispose();
         var current = request = new CancellationTokenSource();
         loading = true;
-        activePointIndex = null;
-        focusedPointIndex = null;
         data = null;
         error = null;
         try
@@ -149,53 +166,43 @@
     private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
     private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
     private static string Label(BurndownPoint point) => point.IsBaseline ? "Início" : point.Date.ToString("dd/MM");
+    private bool IsPartial(BurndownPoint point) => !point.IsBaseline && data is not null
+        && point.Date == DateOnly.FromDateTime(Service.LocalTime(data.CollectedAt).DateTime);
     private string PointDate(BurndownPoint point) => point.IsBaseline ? $"Início · {point.Date:dd/MM/yyyy}"
-        : $"{point.Date:dd/MM/yyyy}{(data is not null && point.Date == DateOnly.FromDateTime(Service.LocalTime(data.CollectedAt).DateTime) ? " · parcial" : "")}";
+        : $"{point.Date:dd/MM/yyyy}{(IsPartial(point) ? " · parcial" : "")}";
     private static string Number(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private decimal PlotX(int index) => 70 + 822m * index / Math.Max(1, data!.Points.Count - 1);
     private string X(int index) => Number(PlotX(index));
     private decimal PlotY(decimal value) => 286 - value / AxisMax * 244;
     private string Y(decimal value) => Number(PlotY(value));
-    private string TooltipStyle(int index, decimal value)
-    {
-        var x = Number(PlotX(index) / 920 * 100);
-        var y = Number(PlotY(value) / 340 * 100);
-        var offset = PlotY(value) >= 145 ? "- 102px" : "+ 12px";
-        return $"left: clamp(8px, calc({x}% - 98px), calc(100% - 204px)); top: clamp(8px, calc({y}% {offset}), calc(100% - 102px));";
-    }
     private RenderFragment PointLegend(BurndownPoint point, string id) => @<div id="@id" class="burndown-tooltip" role="tooltip">
-        <strong>@PointDate(point)</strong>
+        <div class="burndown-tooltip-heading">
+            <strong>@point.Date.ToString("dd/MM/yyyy", Pt)</strong>
+            @if (point.IsBaseline) { <span class="burndown-tooltip-badge">Início</span> }
+            else if (IsPartial(point)) { <span class="burndown-tooltip-badge">Parcial</span> }
+        </div>
         <dl>
-            <div><dt>Restante real</dt><dd>@Hours(point.Remaining)</dd></div>
-            <div><dt>Linha ideal</dt><dd>@Hours(point.Ideal)</dd></div>
-            <div><dt>Diferença</dt><dd>@SignedHours(point.Remaining - point.Ideal)</dd></div>
+            <div class="burndown-tooltip-real"><dt><i class="burndown-real-key" aria-hidden="true"></i>Restante real</dt><dd>@Hours(point.Remaining)</dd></div>
+            <div><dt><i class="burndown-ideal-key" aria-hidden="true"></i>Linha ideal</dt><dd>@Hours(point.Ideal)</dd></div>
+            <div class="burndown-tooltip-difference"><dt>Diferença</dt><dd>@SignedHours(point.Remaining - point.Ideal)</dd></div>
         </dl>
     </div>;
-    private void OnPointEnter(PointerEventArgs args, int index)
-    {
-        if (args.PointerType == "mouse") activePointIndex = index;
-    }
-    private void OnChartLeave(PointerEventArgs args)
-    {
-        if (args.PointerType == "mouse") activePointIndex = focusedPointIndex;
-    }
-    private void OnPointFocus(int index) { focusedPointIndex = index; activePointIndex = index; }
-    private void OnPointBlur(int index)
-    {
-        if (focusedPointIndex == index) focusedPointIndex = null;
-        if (activePointIndex == index) activePointIndex = null;
-    }
-    private void OnPointKeyDown(KeyboardEventArgs args, int index)
-    {
-        if (args.Key is "Enter" or " ") activePointIndex = index;
-    }
-    private void OnChartKeyDown(KeyboardEventArgs args)
-    {
-        if (args.Key == "Escape") DismissTooltip();
-    }
-    private void DismissTooltip() => activePointIndex = null;
     private string Polyline(bool actual) => string.Join(" ", data!.Points.Select((point, index) => (point, index))
         .Where(item => !actual || item.point.Remaining is not null)
         .Select(item => $"{X(item.index)},{Y(actual ? item.point.Remaining!.Value : item.point.Ideal)}"));
-    public void Dispose() { request?.Cancel(); request?.Dispose(); }
+    public async ValueTask DisposeAsync()
+    {
+        request?.Cancel();
+        request?.Dispose();
+        try
+        {
+            if (chartInteraction is not null)
+            {
+                await chartInteraction.InvokeVoidAsync("dispose");
+                await chartInteraction.DisposeAsync();
+            }
+            if (interactionModule is not null) await interactionModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
 }
