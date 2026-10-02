@@ -1,0 +1,161 @@
+@using System.Globalization
+@using TimeOps.Domain
+
+<section class="timeline-panel" aria-label="Planejamento das features">
+    <div class="timeline-heading">
+        <div>
+            <h2>Planejamento por pessoa</h2>
+            <p>Features com ao menos uma Task atribuída à pessoa nesta sprint e equipe. As barras mostram todo o período previsto da feature.</p>
+        </div>
+        <div class="field timeline-picker">
+            <label for="timeline-person">Integrante</label>
+            <select id="timeline-person" value="@(SelectedPersonId ?? "")" @onchange="SelectPerson">
+                <option value="">Toda a equipe</option>
+                @foreach (var person in Dashboard.People)
+                {
+                    <option value="@person.Person!.Id">@person.Person.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (Dashboard.HierarchyError is not null)
+    {
+        <div class="timeline-empty" role="status">@Dashboard.HierarchyError Atualize os dados para tentar carregar a timeline novamente.</div>
+    }
+    else
+    {
+        <div class="timeline-summary" role="status" aria-live="polite">
+            <span><strong>@timeline.Rows.Count</strong> @(timeline.Rows.Count == 1 ? "feature" : "features") · @PersonName</span>
+            @if (timeline.Start is { } start && timeline.End is { } end)
+            {
+                <span>@DateLabel(start) — @DateLabel(end)</span>
+            }
+        </div>
+
+        @if (timeline.TasksWithoutFeature > 0)
+        {
+            <p class="timeline-warning">@timeline.TasksWithoutFeature @(timeline.TasksWithoutFeature == 1 ? "Task sem feature vinculada não aparece" : "Tasks sem feature vinculada não aparecem") no gráfico. Confira os vínculos em Features e histórias.</p>
+        }
+
+        @if (timeline.Rows.Count == 0)
+        {
+            <div class="timeline-empty">Nenhuma feature com Tasks @(SelectedPersonId is null ? "da equipe" : "desta pessoa") nesta sprint. Escolha outro integrante ou outra sprint.</div>
+        }
+        else
+        {
+            <p class="timeline-hint" id="timeline-hint">Duração em dias corridos, incluindo início e fim. Role o gráfico na horizontal para ver todo o período.</p>
+            <div class="timeline-scroll" tabindex="0" role="region" aria-label="Gráfico de Gantt das features" aria-describedby="timeline-hint">
+                <table class="timeline-table">
+                    <caption class="timeline-sr-only">Planejamento das features de @PersonName. Datas previstas e duração em dias corridos.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="timeline-identity-header">Feature / período previsto</th>
+                            <th scope="col" class="timeline-axis-header">
+                                @if (timeline.Start is not null)
+                                {
+                                    <div class="timeline-axis">
+                                        @foreach (var tick in ticks)
+                                        {
+                                            <span class="timeline-tick" style="@Position(tick)"><time datetime="@tick.ToString("yyyy-MM-dd")">@tick.ToString("dd MMM", Pt)</time><small>@tick.Year</small></span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="timeline-axis-empty">Período previsto</span>
+                                }
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in timeline.Rows)
+                        {
+                            <tr @key="row.Feature.Id">
+                                <th scope="row" class="timeline-identity">
+                                    <a href="@row.Feature.Url" target="_blank" rel="noopener noreferrer">#@row.Feature.Id · @row.Feature.Title<span class="timeline-sr-only"> (abrir no Azure DevOps)</span></a>
+                                    <span class="timeline-row-dates">@DateLabel(row.Feature.StartDate) → @DateLabel(row.Feature.EndDate)</span>
+                                    <span class="timeline-row-meta">@if (row.DurationDays is { } days) { <strong>@days @(days == 1 ? "dia" : "dias")</strong><span> · </span> }@row.Tasks.Count @(row.Tasks.Count == 1 ? "Task" : "Tasks") no filtro</span>
+                                </th>
+                                <td class="timeline-track-cell">
+                                    <div class="timeline-track">
+                                        @foreach (var tick in ticks)
+                                        {
+                                            <span class="timeline-grid-line" style="@Position(tick)" aria-hidden="true"></span>
+                                        }
+                                        @if (ShowsToday)
+                                        {
+                                            <span class="timeline-today" style="@Position(Today)" aria-hidden="true"></span>
+                                        }
+                                        @if (row.HasValidDates)
+                                        {
+                                            <a class="timeline-bar" style="@BarStyle(row)" href="@row.Feature.Url" target="_blank" rel="noopener noreferrer" aria-label="@BarLabel(row)" title="@BarLabel(row)">
+                                                <span aria-hidden="true">@row.DurationDays d</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="timeline-date-issue">@DateIssue(row.Feature)</span>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="timeline-legend">
+                <span><i class="timeline-legend-period" aria-hidden="true"></i> Período previsto</span>
+                @if (ShowsToday)
+                {
+                    <span><i class="timeline-legend-today" aria-hidden="true"></i> Hoje · @DateLabel(Today)</span>
+                }
+                <span>Datas ausentes ou invertidas aparecem sem barra.</span>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Dashboard Dashboard { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? SelectedPersonId { get; set; }
+    [Parameter] public EventCallback<string?> SelectedPersonIdChanged { get; set; }
+
+    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    private FeatureTimeline timeline = new([], null, null, 0);
+    private IReadOnlyList<DateOnly> ticks = [];
+    private string PersonName => SelectedPersonId is null ? "Toda a equipe"
+        : Dashboard.People.FirstOrDefault(person => string.Equals(person.Person?.Id, SelectedPersonId, StringComparison.OrdinalIgnoreCase))?.Person?.Name ?? "Pessoa selecionada";
+    private int TotalDays => timeline.Start is { } start && timeline.End is { } end ? end.DayNumber - start.DayNumber + 1 : 1;
+    private bool ShowsToday => timeline.Start is { } start && timeline.End is { } end && Today >= start && Today <= end;
+
+    protected override void OnParametersSet()
+    {
+        timeline = FeatureTimelineCalculator.Calculate(Dashboard.Features ?? [], SelectedPersonId);
+        var axisTicks = new List<DateOnly>();
+        if (timeline.Start is { } start && timeline.End is { } end)
+        {
+            // Bound label density regardless of how many months or years a feature spans.
+            var interval = Math.Max(1, (int)Math.Ceiling(TotalDays / 10d));
+            for (var day = start.DayNumber; day <= end.DayNumber; day += interval)
+                axisTicks.Add(DateOnly.FromDayNumber(day));
+        }
+        ticks = axisTicks;
+    }
+
+    private Task SelectPerson(ChangeEventArgs args) => SelectedPersonIdChanged.InvokeAsync(
+        string.IsNullOrEmpty(args.Value?.ToString()) ? null : args.Value!.ToString());
+    private string Position(DateOnly date) => FormattableString.Invariant($"left:{(date.DayNumber - timeline.Start!.Value.DayNumber) * 100d / TotalDays:0.####}%;");
+    private string BarStyle(FeatureTimelineRow row) => Position(row.Feature.StartDate!.Value)
+        + FormattableString.Invariant($"width:{row.DurationDays!.Value * 100d / TotalDays:0.####}%;");
+    private static string DateLabel(DateOnly? date) => date?.ToString("dd/MM/yyyy", Pt) ?? "Não informada";
+    private static string BarLabel(FeatureTimelineRow row) => $"#{row.Feature.Id} · {row.Feature.Title}: {DateLabel(row.Feature.StartDate)} a {DateLabel(row.Feature.EndDate)}, {row.DurationDays} {(row.DurationDays == 1 ? "dia corrido" : "dias corridos")}. Abrir no Azure DevOps.";
+    private static string DateIssue(ParentWorkItem feature) => (feature.StartDate, feature.EndDate) switch
+    {
+        (null, null) => "Início e fim não informados",
+        (null, _) => "Início não informado",
+        (_, null) => "Fim não informado",
+        _ => "Fim anterior ao início · confira as datas"
+    };
+}

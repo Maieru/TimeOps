@@ -19,6 +19,10 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6v5H3zM12 5h9v5h-9zM7 10v4m0 0h8m0 0v3m-3 0h7v3h-7z"/></svg>
                 <span>Features e histórias</span>
             </button>
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.Timeline ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Timeline ? "true" : "false")" @onclick="() => SelectView(DashboardView.Timeline)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h17M8 7h7M11 12h9M7 17h6"/></svg>
+                <span>Timeline de features</span>
+            </button>
             <button class="sidebar-pill @(Navigation.Current == DashboardView.History ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.History ? "true" : "false")" @onclick="() => SelectView(DashboardView.History)">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.4 2"/></svg>
                 <span>Histórico de tarefas</span>

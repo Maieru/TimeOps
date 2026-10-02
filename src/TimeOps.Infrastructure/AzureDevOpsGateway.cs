@@ -197,7 +197,9 @@ public sealed partial class AzureDevOpsGateway(
         foreach (var batch in ids.Chunk(200))
         {
             var response = await SendAsync(HttpMethod.Post, $"{OrgPath}/{Segment(projectId)}/_apis/wit/workitemsbatch?{Version}",
-                new WorkItemsRequest(batch, ["System.Id", "System.Title", "System.WorkItemType", "System.Parent"]), cancellationToken);
+                // Optional scheduling fields vary by process. Expand links too: an unfiltered
+                // fields response can omit the projected System.Parent field.
+                new WorkItemsRequest(batch, null, Expand: "Relations"), cancellationToken);
             if (response.IsFailure) return Result.Failure(response.Error!);
             if (!TryArray(response.Value.Data, "value", out var values) || values.GetArrayLength() != batch.Length)
                 return Result.Failure(new("devops.incomplete", ErrorCategory.Incomplete, "Nem todas as histórias ou features vinculadas às Tasks puderam ser lidas."));
@@ -209,8 +211,13 @@ public sealed partial class AzureDevOpsGateway(
                 var type = String(fields, "System.WorkItemType");
                 if (id is null || title is null || type is null || !batch.Contains(id.Value))
                     return Result.Failure(new("devops.incomplete", ErrorCategory.Incomplete, "Uma história ou feature retornou dados incompletos."));
-                parents[id.Value] = new(id.Value, title, type, Int(fields, "System.Parent"),
-                    $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}");
+                var parentId = ResolveParentId(item);
+                if (parentId.IsFailure) return Result.Failure(parentId.Error!);
+                parents[id.Value] = new(id.Value, title, type, parentId.Value,
+                    $"https://dev.azure.com/{Segment(connection.Organization)}/{Segment(projectId)}/_workitems/edit/{id.Value}",
+                    Date(Property(fields, "Microsoft.VSTS.Scheduling.StartDate")),
+                    Date(Property(fields, "Microsoft.VSTS.Scheduling.TargetDate"))
+                        ?? Date(Property(fields, "Microsoft.VSTS.Scheduling.FinishDate")));
             }
         }
         return Result.Success();
@@ -250,6 +257,30 @@ public sealed partial class AzureDevOpsGateway(
             Int(fields, "System.Parent"), Int(item, "rev"),
             DateTimeOffset.TryParse(String(fields, "System.ChangedDate"), CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal, out var changedAt) ? changedAt : null));
+    }
+
+    private static Result<int?> ResolveParentId(JsonElement item)
+    {
+        if (Int(Property(item, "fields"), "System.Parent") is > 0 and var projectedParent)
+            return Result<int?>.Success(projectedParent);
+
+        int? parentId = null;
+        if (TryArray(item, "relations", out var relations))
+        {
+            foreach (var relation in relations.EnumerateArray())
+            {
+                if (!string.Equals(String(relation, "rel"), "System.LinkTypes.Hierarchy-Reverse", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!Uri.TryCreate(String(relation, "url"), UriKind.Absolute, out var parentUrl))
+                    return Incomplete<int?>("O vínculo de pai de uma história ou feature retornou uma URL inválida.");
+                var path = parentUrl.AbsolutePath.TrimEnd('/');
+                if (!int.TryParse(path[(path.LastIndexOf('/') + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+                    || id <= 0 || parentId is not null && parentId != id)
+                    return Incomplete<int?>("O vínculo de pai de uma história ou feature retornou dados inconsistentes.");
+                parentId = id;
+            }
+        }
+        return Result<int?>.Success(parentId);
     }
 
     private static Result<TeamCalendar> ParseCalendar(JsonElement settings, JsonElement daysOff)

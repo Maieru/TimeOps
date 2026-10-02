@@ -91,7 +91,64 @@ public sealed class AzureDevOpsGatewayTests
         Assert.Equal(10, result.Value.Tasks.Single().ParentId);
         Assert.Contains(result.Value.Parents!, parent => parent.Id == 10 && parent.ParentId == 20 && parent.Type == "User Story");
         Assert.Contains(result.Value.Parents!, parent => parent.Id == 20 && parent.Type == "Feature");
+        var feature = result.Value.Parents!.Single(parent => parent.Id == 20);
+        Assert.Equal(new DateOnly(2026, 8, 10), feature.StartDate);
+        Assert.Equal(new DateOnly(2026, 10, 30), feature.EndDate);
+        using var parentBatch = System.Text.Json.JsonDocument.Parse(handler.Bodies["workitemsbatch"]);
+        Assert.False(parentBatch.RootElement.TryGetProperty("fields", out _));
+        Assert.Equal("Relations", parentBatch.RootElement.GetProperty("$expand").GetString());
         Assert.Equal(3, handler.Requests.Count(request => request.Contains("workitemsbatch")));
+    }
+
+    [Fact]
+    public async Task Preserva_feature_quando_pai_da_historia_vem_apenas_nas_relacoes()
+    {
+        var handler = new FixtureHandler { Hierarchy = true, ParentOnlyInRelations = true };
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+        var result = await Create(handler).LoadSnapshotAsync("p1", "t1", sprint, false, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var dashboard = MetricsCalculator.Calculate(result.Value, new(2026, 9, 25), new(2026, 9, 27)).Value;
+        var feature = Assert.Single(dashboard.Features!);
+        Assert.Equal(20, feature.Feature?.Id);
+        Assert.Equal(10, Assert.Single(feature.Stories).Story?.Id);
+        Assert.Equal(64, feature.Completed);
+        Assert.Equal(20, Assert.Single(FeatureTimelineCalculator.Calculate(dashboard.Features!, "person-1").Rows).Feature.Id);
+    }
+
+    [Theory]
+    [InlineData("not-a-url")]
+    [InlineData("https://dev.azure.com/org/_apis/wit/workItems/0")]
+    public async Task Vinculo_de_pai_invalido_avisa_em_vez_de_exibir_sem_feature(string parentUrl)
+    {
+        var handler = new FixtureHandler { Hierarchy = true, ParentOnlyInRelations = true, ParentRelationUrl = parentUrl };
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+        var result = await Create(handler).LoadSnapshotAsync("p1", "t1", sprint, false, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var dashboard = MetricsCalculator.Calculate(result.Value, new(2026, 9, 25), new(2026, 9, 27)).Value;
+        Assert.Equal(64, dashboard.Team.Completed);
+        Assert.Null(dashboard.Features);
+        Assert.NotNull(dashboard.HierarchyError);
+        Assert.Contains(dashboard.Warnings, warning => warning.Code == "hierarchy.unavailable");
+    }
+
+    [Theory]
+    [InlineData(null, null, null, null, null)]
+    [InlineData("invalid", "invalid", null, null, null)]
+    [InlineData("2026-08-10T00:00:00Z", null, "2026-10-15T00:00:00Z", "2026-08-10", "2026-10-15")]
+    [InlineData("2026-08-10T00:00:00-03:00", "2026-10-30T00:00:00Z", "2026-10-15T00:00:00Z", "2026-08-10", "2026-10-30")]
+    public async Task Datas_opcionais_nao_impedem_hierarquia_e_target_date_tem_preferencia(
+        string? start, string? target, string? finish, string? expectedStart, string? expectedEnd)
+    {
+        var handler = new FixtureHandler { Hierarchy = true, FeatureStart = start, FeatureTarget = target, FeatureFinish = finish };
+        var sprint = new Sprint("s1", "Sprint", "Projeto\\Sprint", new(2026, 9, 14), new(2026, 9, 25));
+        var result = await Create(handler).LoadSnapshotAsync("p1", "t1", sprint, false, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        var feature = result.Value.Parents!.Single(parent => parent.Id == 20);
+        Assert.Equal(expectedStart is null ? (DateOnly?)null : DateOnly.Parse(expectedStart), feature.StartDate);
+        Assert.Equal(expectedEnd is null ? (DateOnly?)null : DateOnly.Parse(expectedEnd), feature.EndDate);
     }
 
     [Fact]
@@ -193,7 +250,12 @@ public sealed class AzureDevOpsGatewayTests
         public bool EmptyBatch { get; init; }
         public bool Hierarchy { get; init; }
         public bool IncompleteParents { get; init; }
+        public bool ParentOnlyInRelations { get; init; }
+        public string ParentRelationUrl { get; init; } = "https://dev.azure.com/org/_apis/wit/workItems/20";
         public bool PagedTeams { get; init; }
+        public string? FeatureStart { get; init; } = "2026-08-10T00:00:00Z";
+        public string? FeatureTarget { get; init; } = "2026-10-30T00:00:00Z";
+        public string? FeatureFinish { get; init; }
         public Func<CancellationToken, Task>? BeforeMetadata { get; init; }
         public ConcurrentQueue<string> Requests { get; } = new();
         public ConcurrentDictionary<string, string> Bodies { get; } = new();
@@ -237,9 +299,33 @@ public sealed class AzureDevOpsGatewayTests
             {
                 using var body = System.Text.Json.JsonDocument.Parse(Bodies["workitemsbatch"]);
                 var id = body.RootElement.GetProperty("ids")[0].GetInt32();
-                if (id == 10) return IncompleteParents ? """{"value":[]}"""
-                    : """{"value":[{"id":10,"fields":{"System.Id":10,"System.Title":"História","System.WorkItemType":"User Story","System.Parent":20}}]}""";
-                if (id == 20) return """{"value":[{"id":20,"fields":{"System.Id":20,"System.Title":"Feature A","System.WorkItemType":"Feature"}}]}""";
+                if (id == 10)
+                {
+                    if (IncompleteParents) return """{"value":[]}""";
+                    if (!ParentOnlyInRelations) return """{"value":[{"id":10,"fields":{"System.Id":10,"System.Title":"História","System.WorkItemType":"User Story","System.Parent":20}}]}""";
+                    var expanded = body.RootElement.TryGetProperty("$expand", out var expand) && expand.GetString() == "Relations";
+                    return System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        value = new[] { new { id = 10,
+                            fields = new Dictionary<string, object> { ["System.Id"] = 10, ["System.Title"] = "História", ["System.WorkItemType"] = "User Story" },
+                            relations = expanded ? new[]
+                            {
+                                new { rel = "System.LinkTypes.Hierarchy-Forward", url = "https://dev.azure.com/org/_apis/wit/workItems/5" },
+                                new { rel = "System.LinkTypes.Related", url = "https://dev.azure.com/org/_apis/wit/workItems/99" },
+                                new { rel = "System.LinkTypes.Hierarchy-Reverse", url = ParentRelationUrl }
+                            } : [] } }
+                    });
+                }
+                if (id == 20) return System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    value = new[] { new { id = 20, fields = new Dictionary<string, object?>
+                    {
+                        ["System.Id"] = 20, ["System.Title"] = "Feature A", ["System.WorkItemType"] = "Feature",
+                        ["Microsoft.VSTS.Scheduling.StartDate"] = FeatureStart,
+                        ["Microsoft.VSTS.Scheduling.TargetDate"] = FeatureTarget,
+                        ["Microsoft.VSTS.Scheduling.FinishDate"] = FeatureFinish
+                    } } }
+                });
             }
             return Hierarchy
                 ? """{"value":[{"id":5,"fields":{"System.Id":5,"System.Title":"Implementar","System.WorkItemType":"Task","System.Parent":10,"System.State":"Active","System.AreaPath":"Projeto\\Time\\API","System.IterationPath":"Projeto\\Sprint","System.AssignedTo":{"id":"person-1","displayName":"Ana"},"Microsoft.VSTS.Scheduling.CompletedWork":64,"Microsoft.VSTS.Scheduling.OriginalEstimate":80,"Microsoft.VSTS.Scheduling.RemainingWork":16}}]}"""

@@ -260,6 +260,10 @@ else
     {
         <FeatureHierarchy Features="@(dashboard.Features ?? [])" TaskCount="@dashboard.Team.TaskCount" Error="@dashboard.HierarchyError" />
     }
+    else if (viewMode == DashboardView.Timeline)
+    {
+        <FeatureTimelineView Dashboard="dashboard" Today="Service.Today" SelectedPersonId="@selectedPersonId" SelectedPersonIdChanged="OnTimelinePersonChanged" />
+    }
     else if (viewMode == DashboardView.Burndown)
     {
         <BurndownView ProjectId="@projectId" TeamId="@teamId" Dashboard="@dashboard" />
@@ -359,6 +363,7 @@ else
     {
         DashboardView.Person => "Pessoa",
         DashboardView.Features => "Features e histórias",
+        DashboardView.Timeline => "Timeline de features",
         DashboardView.History => "Histórico de alterações de tarefas",
         DashboardView.Burndown => "Burndown da iteração",
         _ => "Equipe"
@@ -367,6 +372,7 @@ else
     {
         DashboardView.Person => "Capacidade, horas e Tasks de cada integrante da sprint.",
         DashboardView.Features => "Horas registradas por feature, história de usuário e Task.",
+        DashboardView.Timeline => "Prazos previstos das features em que cada pessoa participa.",
         DashboardView.History => "Alterações recentes nas horas das Tasks desta sprint.",
         DashboardView.Burndown => "Evolução diária do trabalho restante ao longo da sprint.",
         _ => "Capacidade e horas registradas, diretamente do Azure DevOps."
@@ -377,6 +383,7 @@ else
     private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
         ?? dashboard?.People.FirstOrDefault();
     private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
+    private void OnTimelinePersonChanged(string? personId) => selectedPersonId = personId;
     private void TogglePerson(string id)
     {
         if (!expandedPeople.Add(id)) expandedPeople.Remove(id);
@@ -603,7 +610,7 @@ else
                 unassignedExpanded = false;
                 history = null;
                 stale = false;
-                if (!dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
+                if (selectedPersonId is not null && !dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
                     selectedPersonId = dashboard.People.FirstOrDefault()?.Person?.Id;
                 if (viewMode == DashboardView.History)
                 {
