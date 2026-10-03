@@ -60,11 +60,32 @@ Referências: [Blazor WebAssembly no Pages](https://learn.microsoft.com/en-us/as
 
 ```powershell
 dotnet test tests/TimeOps.Tests/TimeOps.Tests.csproj
-node tests/interaction/burndown-interaction.test.mjs
+node --test tests/interaction/*.test.mjs
 python -m unittest discover -s tests/publishing -v
 ```
 
 Os testes cobrem cálculos, casos de uso, API simulada, histórico, serialização e armazenamento com credenciais sintéticas, restauração, exclusão e falhas do navegador. A validação contra uma organização real exige um PAT fornecido pelo usuário e uma sprint de teste.
+
+### Testes E2E com Playwright
+
+```powershell
+dotnet publish src/TimeOps.Web/TimeOps.Web.csproj -c Release -o artifacts/e2e-site
+dotnet build tests/TimeOps.E2E/TimeOps.E2E.csproj -c Release
+pwsh tests/TimeOps.E2E/bin/Release/net10.0/playwright.ps1 install chromium
+dotnet test tests/TimeOps.E2E/TimeOps.E2E.csproj -c Release --no-build --no-restore
+```
+
+Requisitos: .NET 10 e PowerShell 7 (`pwsh`). No Linux, use `install --with-deps chromium` para instalar também as dependências do navegador, conforme a [documentação do Playwright](https://playwright.dev/dotnet/docs/ci).
+
+A classe `CenarioE2E` segue o ciclo de inicialização e descarte do exemplo: `WebApplicationFactory`, Kestrel em uma porta dinâmica de loopback, Chromium, contexto isolado em `pt-BR`, screenshot e trace por cenário. Como o TimeOps é WebAssembly, `TimeOps.E2E.Host` serve os arquivos publicados e o Playwright intercepta todas as chamadas a `dev.azure.com` com `AzureDevOpsMock`. Os testes exercitam o aplicativo e o gateway REST reais com credenciais e respostas sintéticas; não precisam de PAT real. As datas da fixture usam a última semana de segunda a sexta, mantendo a sprint encerrada em qualquer dia de execução.
+
+Os cenários cobrem conexão persistida e temporária, credencial corrompida, erros 401/403, seleção de contexto, totais e Tasks, hierarquia, filtro da timeline, histórico e cache, atualização com falha e recuperação, burndown com teclado, mouse e toque em tela pequena. Screenshots e traces ficam em `artifacts/e2e/<classe>/<id>/`, inclusive quando um cenário falha. Para abrir um trace:
+
+```powershell
+pwsh tests/TimeOps.E2E/bin/Release/net10.0/playwright.ps1 show-trace artifacts/e2e/<classe>/<id>/trace.zip
+```
+
+`E2E_WEB_ROOT` permite apontar para outro diretório `wwwroot` publicado. Por padrão, o navegador roda sem janela; use `$env:E2E_HEADLESS = "0"` para exibi-la e `$env:E2E_SLOWMO = "30"` para desacelerar as ações. `E2E_CHANNEL` permite escolher um navegador instalado, como `msedge`. O workflow instala Chromium, executa os cenários antes da preparação do Pages e guarda screenshots, traces e resultados no artefato `playwright-e2e` por sete dias.
 
 ## Estrutura
 
@@ -72,3 +93,4 @@ Os testes cobrem cálculos, casos de uso, API simulada, histórico, serializaç�
 - `TimeOps.Application`: casos de uso e contratos.
 - `TimeOps.Infrastructure`: REST do Azure DevOps, PAT, armazenamento do navegador, cache e falhas.
 - `TimeOps.Web`: interface Blazor WebAssembly e composição das dependências.
+- `TimeOps.E2E`: cenários Playwright com Azure DevOps simulado; `TimeOps.E2E.Host` serve o site durante os testes.

@@ -87,6 +87,60 @@ public sealed class FeatureTimelineTests
         Assert.Equal(new DateOnly(2026, 10, 1), ana.End);
     }
 
+    [Fact]
+    public void Task_repetida_em_historias_da_feature_aparece_uma_vez()
+    {
+        var task = Task(1, Ana);
+        var feature = Feature(10, new(2026, 9, 1), new(2026, 9, 30), task, task, Task(2, OtherAna));
+
+        var all = FeatureTimelineCalculator.Calculate([feature]);
+        Assert.Equal(new[] { 1, 2 }, Assert.Single(all.Rows).Tasks.Select(item => item.Id));
+        var filtered = FeatureTimelineCalculator.Calculate([feature], Ana.Id);
+        Assert.Equal(1, Assert.Single(Assert.Single(filtered.Rows).Tasks).Id);
+    }
+
+    [Fact]
+    public void Eixo_usa_extremos_de_todas_as_features_e_recalcula_ao_filtrar()
+    {
+        var longFeature = Feature(10, new(2026, 8, 1), new(2026, 12, 31), Task(1, OtherAna));
+        var anaFeature = Feature(20, new(2026, 9, 1), new(2026, 9, 30), Task(2, Ana));
+        var empty = Feature(30, new(2000, 1, 1), new(2030, 1, 1));
+
+        var all = FeatureTimelineCalculator.Calculate([anaFeature, longFeature, empty]);
+        Assert.Equal(2, all.Rows.Count);
+        Assert.Equal(new DateOnly(2026, 8, 1), all.Start);
+        Assert.Equal(new DateOnly(2026, 12, 31), all.End);
+
+        var filtered = FeatureTimelineCalculator.Calculate([anaFeature, longFeature, empty], Ana.Id);
+        Assert.Equal(new DateOnly(2026, 9, 1), filtered.Start);
+        Assert.Equal(new DateOnly(2026, 9, 30), filtered.End);
+    }
+
+    [Fact]
+    public void Ordenacao_desempata_data_por_titulo_e_id_e_deixa_periodos_invalidos_no_fim()
+    {
+        var beta = Feature(1, new(2026, 9, 1), new(2026, 9, 30), Task(1, Ana));
+        var alpha = Feature(2, new(2026, 9, 1), new(2026, 9, 30), Task(2, Ana)) with
+        { Feature = beta.Feature! with { Id = 2, Title = "Alpha" } };
+        beta = beta with { Feature = beta.Feature! with { Title = "Beta" } };
+        var sameTitle = alpha with { Feature = alpha.Feature! with { Id = 3, Title = "alpha" } };
+        var earlier = Feature(4, new(2026, 8, 1), new(2026, 8, 31), Task(4, Ana));
+        var invalid = Feature(5, new(2020, 1, 2), new(2020, 1, 1), Task(5, Ana));
+
+        var result = FeatureTimelineCalculator.Calculate([invalid, beta, sameTitle, alpha, earlier]);
+
+        Assert.Equal(new[] { 4, 2, 3, 1, 5 }, result.Rows.Select(row => row.Feature.Id));
+    }
+
+    [Fact]
+    public void Duracao_inclusiva_conta_dia_bissexto()
+    {
+        var result = FeatureTimelineCalculator.Calculate(
+            [Feature(1, new(2024, 2, 28), new(2024, 3, 1), Task(1, Ana))]);
+
+        Assert.Equal(3, Assert.Single(result.Rows).DurationDays);
+    }
+
     private static FeatureEffort Feature(int id, DateOnly? start, DateOnly? end, params TaskWork[] tasks)
         => new(new(id, "Feature " + id, "Feature", null, "https://example.com/" + id, start, end),
             tasks.Select(task => new StoryEffort(null, [task], 0)).ToArray(), 0);

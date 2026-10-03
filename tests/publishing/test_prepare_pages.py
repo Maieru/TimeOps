@@ -55,6 +55,46 @@ class PagesPreparationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.prepare(self.root, "//example.com")
 
+    def test_invalid_base_paths_leave_artifact_unchanged(self):
+        original = (self.root / "index.html").read_bytes()
+        for base in ["TimeOps", "https://example.com/", "/TimeOps?query=1",
+                     "/TimeOps#fragment", "/TimeOps\\nested"]:
+            with self.subTest(base=base):
+                with self.assertRaisesRegex(ValueError, "site-relative"):
+                    module.prepare(self.root, base)
+                self.assertEqual(original, (self.root / "index.html").read_bytes())
+                self.assertFalse((self.root / "404.html").exists())
+                self.assertFalse((self.root / ".nojekyll").exists())
+                self.assertTrue((self.root / "index.html.gz").exists())
+                self.assertTrue((self.root / "index.html.br").exists())
+
+    def test_multiple_base_markers_are_rejected(self):
+        original = '<base href="/" /><base href="/" />'
+        (self.root / "index.html").write_text(original, encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            module.prepare(self.root, "/TimeOps")
+        self.assertEqual(original, (self.root / "index.html").read_text(encoding="utf-8"))
+        self.assertFalse((self.root / "404.html").exists())
+
+    def test_asset_outside_publish_directory_is_rejected_even_if_it_exists(self):
+        with tempfile.TemporaryDirectory() as outside:
+            asset = Path(outside) / "external.css"
+            asset.touch()
+            original = f'<base href="/" /><link rel="stylesheet" href="{asset.as_posix()}" />'
+            (self.root / "index.html").write_text(original, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid published asset"):
+                module.prepare(self.root, "/TimeOps")
+            self.assertEqual(original, (self.root / "index.html").read_text(encoding="utf-8"))
+            self.assertFalse((self.root / "404.html").exists())
+
+    def test_trailing_slash_and_missing_compressed_copies_are_supported(self):
+        (self.root / "index.html.br").unlink()
+        (self.root / "index.html.gz").unlink()
+        module.prepare(self.root, "/TimeOps/")
+        html = (self.root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<base href="/TimeOps/" />', html)
+        self.assertEqual(html, (self.root / "404.html").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

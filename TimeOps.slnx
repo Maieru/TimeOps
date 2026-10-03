@@ -6,6 +6,8 @@
     <Project Path="src/TimeOps.Web/TimeOps.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TimeOps.E2E.Host/TimeOps.E2E.Host.csproj" />
+    <Project Path="tests/TimeOps.E2E/TimeOps.E2E.csproj" />
     <Project Path="tests/TimeOps.Tests/TimeOps.Tests.csproj" />
   </Folder>
 </Solution>
