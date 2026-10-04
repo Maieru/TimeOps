@@ -57,6 +57,8 @@ jobs:
       - name: Test end-to-end with mocked Azure DevOps
         env:
           E2E_WEB_ROOT: ${{ github.workspace }}/publish/wwwroot
+          E2E_HEADLESS: '1'
+          E2E_SLOWMO: '0'
         run: dotnet test tests/TimeOps.E2E/TimeOps.E2E.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=e2e.trx" --results-directory artifacts/e2e-results
 
       - name: Upload Playwright screenshots, traces and results

@@ -85,7 +85,7 @@ Os cenários cobrem conexão persistida e temporária, credencial corrompida, er
 pwsh tests/TimeOps.E2E/bin/Release/net10.0/playwright.ps1 show-trace artifacts/e2e/<classe>/<id>/trace.zip
 ```
 
-`E2E_WEB_ROOT` permite apontar para outro diretório `wwwroot` publicado. Por padrão, o navegador roda sem janela; use `$env:E2E_HEADLESS = "0"` para exibi-la e `$env:E2E_SLOWMO = "30"` para desacelerar as ações. `E2E_CHANNEL` permite escolher um navegador instalado, como `msedge`. O workflow instala Chromium, executa os cenários antes da preparação do Pages e guarda screenshots, traces e resultados no artefato `playwright-e2e` por sete dias.
+`E2E_WEB_ROOT` permite apontar para outro diretório `wwwroot` publicado. Por padrão, o navegador roda sem janela; use `$env:E2E_HEADLESS = "0"` para exibi-la e `$env:E2E_SLOWMO = "30"` para desacelerar as ações. `E2E_CHANNEL` permite escolher um navegador instalado, como `msedge`. No CI, o workflow define `E2E_HEADLESS=1` e `E2E_SLOWMO=0` para executar sem interface gráfica nem atraso entre ações. O workflow instala Chromium, executa os cenários antes da preparação do Pages e guarda screenshots, traces e resultados no artefato `playwright-e2e` por sete dias.
 
 ## Estrutura
 

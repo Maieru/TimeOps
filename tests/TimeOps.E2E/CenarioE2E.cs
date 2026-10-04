@@ -57,7 +57,7 @@ public abstract class CenarioE2E(ITestOutputHelper output) : IAsyncLifetime
             navegador = await playwright.Chromium.LaunchAsync(new()
             {
                 Channel = Environment.GetEnvironmentVariable("E2E_CHANNEL"),
-                Headless = false,
+                Headless = Environment.GetEnvironmentVariable("E2E_HEADLESS") != "0",
                 SlowMo = int.TryParse(Environment.GetEnvironmentVariable("E2E_SLOWMO"), out var slowMo) ? slowMo : 300
             });
             contexto = await navegador.NewContextAsync(new()
