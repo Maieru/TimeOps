@@ -1,0 +1,52 @@
+.filters.export-context-filters { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+.export-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.export-period { padding: 26px 28px; border-bottom: 1px solid var(--line); }
+.export-heading h2, .export-result-heading h2 { margin: 0 0 7px; color: var(--ink); font-size: 21px; letter-spacing: -.02em; }
+.export-heading p, .export-count { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.export-dates { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin-top: 20px; }
+.export-dates .field { flex: 0 1 220px; }
+.export-panel .field { min-width: 0; }
+.export-action { min-height: 44px; justify-content: center; font-weight: 700; }
+.export-results { display: flex; align-items: end; flex-wrap: wrap; gap: 20px; padding: 24px 28px; }
+.export-result-heading { margin-right: auto; align-self: center; }
+.export-results .field { flex: 0 1 240px; }
+.export-count { font-variant-numeric: tabular-nums; }
+.export-feedback { padding: 0 28px 24px; }
+.export-empty { padding: 28px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.export-table-hint { display: none; }
+.export-table-scroll { overflow: auto; max-height: 460px; border-block: 1px solid var(--line); }
+.export-table { width: 100%; min-width: 800px; border-collapse: collapse; }
+.export-table th, .export-table td { padding: 15px 20px; text-align: left; }
+.export-table th { position: sticky; top: 0; background: var(--surface-raised); color: var(--muted); font-size: 12px; }
+.export-table td { color: var(--ink); font-size: 13px; }
+.export-table th:nth-child(2), .export-table th:nth-child(3) { width: 28%; }
+.export-table td:nth-child(2), .export-table td:nth-child(3) { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.export-table th:last-child, .export-table td:last-child { text-align: right; }
+.export-preview-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 28px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.export-preview-footer strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.export-collected { margin: 0; padding: 0 28px 20px; color: var(--quiet); font-size: 12px; line-height: 1.5; }
+.export-method { border-top: 1px solid var(--line); padding: 18px 28px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.export-method summary { color: var(--ink); width: fit-content; }
+.export-method p { margin: 12px 0 0; max-width: 75ch; }
+@media (max-width: 1250px) {
+    .filters.export-context-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+    .export-table-hint { display: block; margin: 0; padding: 0 20px 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .export-period, .export-results { padding: 20px; }
+    .export-results { gap: 16px; }
+    .export-result-heading { flex: 1 1 100%; }
+    .export-results .field { flex: 1 1 200px; }
+    .export-empty { padding: 24px 20px; }
+    .export-feedback { padding-inline: 20px; }
+    .export-preview-footer { padding: 16px 20px; }
+    .export-collected { padding-inline: 20px; }
+    .export-method { padding: 18px 20px; }
+}
+@media (max-width: 600px) {
+    .export-dates .field, .export-results .field { flex: 1 1 100%; }
+    .export-action { width: 100%; }
+}
+@media (max-width: 460px) {
+    .filters.export-context-filters { grid-template-columns: minmax(0, 1fr); }
+}

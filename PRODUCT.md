@@ -35,7 +35,8 @@ As métricas principais são um retrato dos work items no momento da consulta. A
 - A timeline mostra os períodos previstos das features com Tasks no escopo da sprint e equipe. O filtro por pessoa usa o responsável atual de ao menos uma Task vinculada à feature, por história ou diretamente. O período usa Start Date e Target Date (Finish Date como alternativa) e a duração conta dias corridos, incluindo início e fim. Datas ausentes ou invertidas aparecem sem barra, com aviso.
 - O histórico mostra diferenças entre revisões dos campos de esforço. O burndown reconstrói o `Remaining Work` desde a abertura da sprint somente para as Tasks que estão atualmente na sprint e na área da equipe; entradas e saídas desse escopo não são reconstruídas.
 - O burndown compara o restante diário com uma linha ideal que desconta dias não úteis e folgas da equipe. Há um ponto de abertura e valores de fim de dia; o dia da coleta é parcial e os valores reais futuros ficam ausentes. O gráfico SVG e a tabela diária expansível compartilham os mesmos valores e usam rolagem interna em telas pequenas.
-- Não há escrita no DevOps, reconstrução histórica do escopo ou dos responsáveis, consolidação entre equipes, notificações ou exportação no piloto.
+- A aba Exportar Excel no menu da sprint permite escolher datas e autor, conferir uma prévia e baixar uma linha por aumento de Completed Work, com nome do autor, tarefa, Feature, data e horas acrescentadas. A quarta e a sétima colunas ficam vazias. Considera o escopo atual da sprint e equipe, nomes atuais e dias no fuso configurado; reduções de horas ficam fora do arquivo. Histórico ou hierarquia incompletos impedem o download.
+- Não há escrita no DevOps, reconstrução histórica do escopo ou dos responsáveis, consolidação entre equipes ou notificações no piloto.
 
 ## Brand Commitments
 

@@ -42,6 +42,16 @@ O burndown reconstrói revisões somente das Tasks que estão atualmente na spri
 
 As chamadas ao DevOps agora estão sujeitas ao **CORS do navegador**. Falhas de rede orientam verificar esse bloqueio. Antes de disponibilizar para a equipe, valide os endpoints GET e POST, paginação e histórico com uma organização e PAT reais, a partir do endereço final do site. O host estático não consegue alterar a política CORS do Azure DevOps; se algum endpoint for bloqueado, será necessário rever a integração. Não desative a segurança do navegador.
 
+## Exportar horas para Excel
+
+Abra a aba **Exportar Excel** no menu da sprint, selecione **Data inicial** e **Data final** e use **Carregar alterações**. As datas começam no período da sprint; em sprints em andamento, o fim é limitado a hoje. Depois escolha **Todos os autores** ou uma **Pessoa**, confira a **Prévia da planilha** e o total de horas e clique em **Baixar Excel**. A prévia mostra até 50 linhas; o arquivo inclui todos os registros selecionados. Os autores vêm do histórico, inclusive quando não são responsáveis atuais pelas Tasks. Alterar datas exige carregar novamente, e trocar projeto, equipe, sprint ou conexão limpa a exportação. A aba utiliza os filtros de contexto do painel, sem o filtro de referência de capacidade.
+
+Cada linha representa um aumento de `Completed Work`: as horas são o valor novo menos o anterior, com vazio considerado zero. Reduções, mudanças sem diferença e alterações somente de estimativa ou restante não entram. A primeira coluna identifica quem fez a alteração, não o responsável atual. A soma exportada representa somente os aumentos selecionados, e pode diferir do Completed atual por causa de correções ou registros fora do período.
+
+O arquivo `.xlsx` contém uma aba **Tarefas**, com os cabeçalhos **x**, **Atividade**, **OP/PMC/PGP**, **Nome da OP/PMC/PGP**, **Data**, **Horas** e **Comentários**. A terceira coluna traz a Feature, por vínculo direto ou história; a quarta e a sétima ficam vazias. Datas são valores de Excel exibidos como `dd/MM/yyyy`, e horas são números decimais. O cabeçalho é cinza e em negrito, com fonte Arial 10. Nomes e títulos são texto literal.
+
+A exportação faz uma nova coleta, consulta apenas Tasks atualmente na sprint e na área da equipe e usa os nomes atuais das Tasks e Features. Considera dias inteiros no fuso configurado (`America/Sao_Paulo` por padrão), até o instante da coleta. Não reconstrói Tasks que saíram do escopo nem vínculos históricos. Falhas de hierarquia ou histórico impedem um arquivo parcial; sem resultados, o download fica desabilitado. Os limites de leitura do histórico continuam valendo: até 1.000 Tasks alteradas e paginação completa. Todo o arquivo é gerado e baixado no navegador, sem servidor de exportação.
+
 ## Publicação estática
 
 ```powershell

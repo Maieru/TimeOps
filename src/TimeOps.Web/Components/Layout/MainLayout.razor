@@ -31,6 +31,10 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16M7 7l4 4 4-1 5 7M7 6l13 12"/></svg>
                 <span>Burndown da iteração</span>
             </button>
+            <button class="sidebar-pill @(Navigation.Current == DashboardView.Export ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Export ? "true" : "false")" @onclick="() => SelectView(DashboardView.Export)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></svg>
+                <span>Exportar Excel</span>
+            </button>
         </nav>
         <div class="sidebar-context" aria-label="Contexto selecionado">
             <span>Contexto atual</span>

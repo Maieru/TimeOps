@@ -58,7 +58,7 @@ O aplicativo e os testes estão implementados; os documentos registram as regras
 
 ## Evoluções fora do piloto
 
-Acesso simultâneo da equipe, login corporativo, consolidação entre equipes, séries históricas, notificações e exportação. O piloto também não altera work items ou configurações do DevOps.
+Acesso simultâneo da equipe, login corporativo, consolidação entre equipes, séries históricas e notificações. O piloto também não altera work items ou configurações do DevOps. A exportação Excel de aumentos de Completed Work, por período e autor, está disponível na aba Exportar Excel do menu da sprint; consulte o README principal.
 
 ## Referências oficiais
 

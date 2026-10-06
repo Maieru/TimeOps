@@ -1,0 +1,199 @@
+@implements IAsyncDisposable
+@using System.Globalization
+@using Microsoft.JSInterop
+@using TimeOps.Application
+@using TimeOps.Domain
+@inject TaskExportService ExportService
+@inject ITaskExportWriter Writer
+@inject DashboardService DashboardService
+@inject IJSRuntime JS
+
+<section class="export-panel" aria-label="Exportação de horas" aria-busy="@(loading || downloading ? "true" : "false")">
+    <div class="export-period">
+    <div class="export-heading">
+        <h2>Período da exportação</h2>
+        <p>Consulte as horas acrescentadas às tarefas desta sprint.</p>
+    </div>
+    <form class="export-dates" @onsubmit="LoadAsync" @onsubmit:preventDefault>
+        <div class="field">
+            <label for="export-from">Data inicial</label>
+            <input @ref="firstInput" id="export-from" type="date" value="@fromText" max="@Today" @onchange="FromChanged" disabled="@Disabled" required />
+        </div>
+        <div class="field">
+            <label for="export-to">Data final</label>
+            <input id="export-to" type="date" value="@toText" max="@Today" @onchange="ToChanged" disabled="@Disabled" required />
+        </div>
+        <button class="refresh export-action" type="submit" disabled="@Disabled">@(loading ? "Carregando alterações…" : "Carregar alterações")</button>
+    </form>
+    </div>
+    @if (error is not null)
+    {
+        <div class="export-feedback"><div class="notice error export-error" role="alert"><strong>Não foi possível exportar.</strong> @error</div></div>
+    }
+    @if (loading)
+    {
+        <div class="export-empty" role="status">Consultando as alterações de horas no Azure DevOps…</div>
+    }
+    @if (data is not null)
+    {
+        <div class="export-results">
+            <div class="export-result-heading">
+                <h2>Prévia da planilha</h2>
+                <p class="export-count" role="status">@SelectedRows.Count @(SelectedRows.Count == 1 ? "linha selecionada" : "linhas selecionadas")</p>
+            </div>
+            <div class="field">
+                <label for="export-author">Pessoa</label>
+                <select id="export-author" @bind="authorSelection" disabled="@Disabled">
+                    <option value="">Todos os autores</option>
+                    @foreach (var author in authors)
+                    {
+                        <option value="@($"person:{author.Id}")">@author.Name</option>
+                    }
+                    @if (data.Rows.Any(row => row.Author is null))
+                    {
+                        <option value="unknown">Autor não informado</option>
+                    }
+                </select>
+            </div>
+            <button class="refresh export-action export-download" type="button" disabled="@(Disabled || SelectedRows.Count == 0)" @onclick="DownloadAsync">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></svg>
+                @(downloading ? "Gerando Excel…" : "Baixar Excel")
+            </button>
+        </div>
+        @if (SelectedRows.Count == 0)
+        {
+            <div class="export-empty">Não há aumentos de horas no período para a seleção atual. Tente outro período ou selecione todos os autores.</div>
+        }
+        else
+        {
+            <p class="export-table-hint">Role a prévia na horizontal para ver todas as colunas.</p>
+            <div class="export-table-scroll" role="region" aria-label="Prévia da planilha" tabindex="0">
+                <table class="export-table">
+                    <thead><tr><th scope="col">Pessoa</th><th scope="col">Atividade</th><th scope="col">Feature</th><th scope="col">Data</th><th scope="col">Horas</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in SelectedRows.Take(50))
+                        {
+                            <tr><td>@row.AuthorName</td><td>@row.TaskTitle</td><td>@(row.FeatureTitle ?? "—")</td><td>@row.Date.ToString("dd/MM/yyyy")</td><td>@row.Hours.ToString("N2", Pt)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="export-preview-footer">
+                <span>Total selecionado: <strong>@SelectedRows.Sum(row => row.Hours).ToString("N2", Pt) h</strong></span>
+                @if (SelectedRows.Count > 50) { <span>A prévia mostra 50 linhas. O Excel inclui todas as @SelectedRows.Count linhas selecionadas.</span> }
+            </div>
+        }
+        <p class="export-collected">Registros consultados em @DashboardService.LocalTime(data.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt).</p>
+    }
+    else if (!loading && error is null)
+    {
+        <div class="export-empty">Carregue as alterações para escolher a pessoa e conferir os registros antes de baixar.</div>
+    }
+    <details class="export-method">
+        <summary>Formato e critérios do arquivo</summary>
+        <p>Uma linha por aumento de Completed Work, com o autor da alteração e as horas acrescentadas. Reduções ficam fora do arquivo.</p>
+        <p>O Excel mantém as sete colunas do modelo, com a quarta e a sétima vazias. Considera as tarefas atualmente nesta equipe e sprint e os nomes atuais das tarefas e Features.</p>
+    </details>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string ProjectId { get; set; } = "";
+    [Parameter, EditorRequired] public string TeamId { get; set; } = "";
+    [Parameter, EditorRequired] public Sprint Sprint { get; set; } = default!;
+    [Parameter] public bool Busy { get; set; }
+    private string fromText = "";
+    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
+    private string toText = "";
+    private string authorSelection = "";
+    private TaskExportData? data;
+    private IReadOnlyList<Person> authors = [];
+    private string? error;
+    private bool loading;
+    private bool downloading;
+    private bool disposed;
+    private ElementReference firstInput;
+    private CancellationTokenSource? request;
+    private IJSObjectReference? module;
+    private string Today => DashboardService.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private bool Disabled => Busy || loading || downloading;
+    private IReadOnlyList<TaskExportRow> SelectedRows => data?.ForAuthor(authorSelection.Length == 0 ? null
+        : authorSelection == "unknown" ? "" : authorSelection[7..]) ?? [];
+
+    protected override void OnInitialized()
+    {
+        var today = DashboardService.Today;
+        fromText = (Sprint.Start ?? today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        // Current sprints can end in the future; the default exports through today.
+        toText = (Sprint.End is { } end && end < today ? end : today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await firstInput.FocusAsync();
+    }
+
+    private void FromChanged(ChangeEventArgs args) { fromText = args.Value?.ToString() ?? ""; Invalidate(); }
+    private void ToChanged(ChangeEventArgs args) { toText = args.Value?.ToString() ?? ""; Invalidate(); }
+    private void Invalidate() { data = null; authors = []; authorSelection = ""; error = null; }
+
+    private async Task LoadAsync()
+    {
+        if (Disabled) return;
+        Invalidate();
+        if (!DateOnly.TryParseExact(fromText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)
+            || !DateOnly.TryParseExact(toText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to))
+        { error = "Informe datas válidas para a exportação."; return; }
+        request?.Dispose();
+        var current = request = new CancellationTokenSource();
+        loading = true;
+        try
+        {
+            var result = await ExportService.LoadAsync(ProjectId, TeamId, Sprint, from, to, current.Token);
+            if (disposed || current.IsCancellationRequested) return;
+            if (result.IsFailure) error = result.Error!.Message;
+            else
+            {
+                data = result.Value;
+                authors = data.Rows.Where(row => row.Author is not null).Select(row => row.Author!)
+                    .DistinctBy(author => author.Id, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(author => author.Name, StringComparer.Create(CultureInfo.GetCultureInfo("pt-BR"), true)).ToArray();
+            }
+        }
+        catch (OperationCanceledException) when (current.IsCancellationRequested) { }
+        catch (Exception)
+        {
+            if (!disposed) error = "Não foi possível carregar as alterações. Tente novamente.";
+        }
+        finally { if (!disposed) loading = false; }
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (Disabled || data is null || SelectedRows.Count == 0) return;
+        downloading = true;
+        error = null;
+        try
+        {
+            var result = Writer.Write(SelectedRows);
+            if (result.IsFailure) { error = result.Error!.Message; return; }
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./task-export.mjs");
+            if (disposed) { await module.DisposeAsync(); module = null; return; }
+            using var stream = new MemoryStream(result.Value);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", TaskExportService.FileName(data), reference);
+        }
+        catch (Exception)
+        {
+            if (!disposed) error = "Não foi possível baixar o Excel. Tente novamente.";
+        }
+        finally { if (!disposed) downloading = false; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        request?.Cancel();
+        request?.Dispose();
+        if (module is not null) await module.DisposeAsync();
+    }
+}

@@ -91,4 +91,10 @@ Considere `C(p)` a capacidade diária da pessoa, `D(p)` a quantidade de dias ele
 
 ## Fora do escopo inicial
 
-Escrita no DevOps, apontamento de horas pelo aplicativo, reconstrução histórica dos totais por pessoa, login corporativo, acesso simultâneo da equipe, consolidação entre equipes, notificações e exportação.
+Escrita no DevOps, apontamento de horas pelo aplicativo, reconstrução histórica dos totais por pessoa, login corporativo, acesso simultâneo da equipe, consolidação entre equipes e notificações.
+
+## Exportação Excel
+
+Na aba Exportar Excel do menu da sprint, o usuário pode selecionar datas e autor, conferir uma prévia dos registros e do total de horas e baixar um `.xlsx`. Cada linha corresponde a um aumento de Completed Work, com autor da alteração, nome atual da Task, nome atual da Feature, quarta coluna vazia, data local da alteração, horas acrescentadas e sétima coluna vazia. Os cabeçalhos são `x`, `Atividade`, `OP/PMC/PGP`, `Nome da OP/PMC/PGP`, `Data`, `Horas` e `Comentários`.
+
+O período inclui os dias inicial e final no fuso configurado, limitado à coleta. São exportadas apenas diferenças positivas; reduções e diferenças zero ficam fora. A seleção de pessoa usa a identidade do autor da alteração, incluindo autores fora da equipe atual. Tasks sem Feature mantêm a terceira coluna vazia; falhas de hierarquia ou histórico impedem download parcial. Datas futuras ou invertidas são rejeitadas. O arquivo usa o escopo atual da equipe e sprint, sem reconstruir saídas do escopo nem vínculos históricos.

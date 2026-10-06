@@ -255,6 +255,50 @@ public sealed class AzureDevOpsHistoryTests
         Assert.Empty(result.Value.Changes);
     }
 
+    [Fact]
+    public async Task Exportacao_le_apenas_completed_no_snapshot_e_reutiliza_paginas_entre_periodos()
+    {
+        var handler = new HistoryHandler { Paged = true };
+        var gateway = Create(handler);
+        var snapshot = Snapshot();
+        var first = await gateway.LoadCompletedHistoryAsync("p1", "t1", snapshot, From, To, CancellationToken.None);
+        var next = await gateway.LoadCompletedHistoryAsync("p1", "t1", snapshot, From, To.AddTicks(-1), CancellationToken.None);
+        Assert.True(first.IsSuccess, first.Error?.Message);
+        Assert.True(next.IsSuccess, next.Error?.Message);
+        Assert.Equal(EffortField.Completed, Assert.Single(first.Value.Changes).Field);
+        Assert.Equal(5m, first.Value.Changes[0].Delta);
+        Assert.Equal(2, handler.Requests.Count(request => request.Contains("/updates")));
+        Assert.DoesNotContain(handler.Requests, request => request.Contains("/workitemsbatch") || request.Contains("/wiql") || request.Contains("/teamfieldvalues"));
+    }
+
+    [Fact]
+    public async Task Exportacao_ignora_remaining_invalido_mas_rejeita_paginas_incompletas()
+    {
+        var result = await Create(new HistoryHandler { InvalidOtherHours = true })
+            .LoadCompletedHistoryAsync("p1", "t1", Snapshot(), From, To, CancellationToken.None);
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(EffortField.Completed, Assert.Single(result.Value.Changes).Field);
+        var failure = await Create(new HistoryHandler { Paged = true, IncompleteSecondPage = true })
+            .LoadCompletedHistoryAsync("p1", "t1", Snapshot(), From, To, CancellationToken.None);
+        Assert.True(failure.IsFailure);
+    }
+
+    [Fact]
+    public async Task Exportacao_pula_tasks_antigas_e_rejeita_limites_e_datas_fora_da_coleta()
+    {
+        var handler = new HistoryHandler();
+        var gateway = Create(handler);
+        var snapshot = Snapshot();
+        var unchanged = snapshot with { Tasks = [snapshot.Tasks[0] with { ChangedAt = From.AddTicks(-1) }] };
+        var result = await gateway.LoadCompletedHistoryAsync("p1", "t1", unchanged, From, To, CancellationToken.None);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Changes);
+        var tooMany = snapshot with { Tasks = Enumerable.Range(1, 1001).Select(id => snapshot.Tasks[0] with { Id = id }).ToArray() };
+        Assert.True((await gateway.LoadCompletedHistoryAsync("p1", "t1", tooMany, From, To, CancellationToken.None)).IsFailure);
+        Assert.True((await gateway.LoadCompletedHistoryAsync("p1", "t1", snapshot, From, To.AddTicks(1), CancellationToken.None)).IsFailure);
+        Assert.Empty(handler.Requests);
+    }
+
     private static AzureDevOpsGateway Create(HistoryHandler handler, RuntimeConnection? connection = null)
     {
         if (connection is null)
@@ -270,6 +314,7 @@ public sealed class AzureDevOpsHistoryTests
     {
         public bool Paged { get; init; }
         public bool InvalidHours { get; init; }
+        public bool InvalidOtherHours { get; init; }
         public bool MissingChangedDate { get; init; }
         public int? Revision { get; set; } = 1;
         public string Title { get; set; } = "Implementar";
@@ -323,6 +368,7 @@ public sealed class AzureDevOpsHistoryTests
                     json = """{"value":[{"id":1,"workItemId":5,"revisedDate":"2026-09-26T15:30:00Z","revisedBy":{"id":"author-1","displayName":"Ana"},"fields":{"System.ChangedDate":{"newValue":"2026-09-26T15:29:00Z"},"Microsoft.VSTS.Scheduling.CompletedWork":{"oldValue":0,"newValue":99}}},{"id":2,"workItemId":5,"revisedDate":"9999-01-01T00:00:00Z","revisedBy":{"id":"author-1","displayName":"Ana"},"fields":{"System.ChangedDate":{"newValue":"2026-09-27T10:00:00Z"},"Microsoft.VSTS.Scheduling.CompletedWork":{"oldValue":3,"newValue":8}}},{"id":3,"workItemId":5,"revisedDate":"2026-09-27T12:00:00Z","revisedBy":{"id":"author-2","displayName":"Bruno"},"fields":{"System.ChangedDate":{"newValue":"2026-09-27T11:00:00Z"},"Microsoft.VSTS.Scheduling.OriginalEstimate":{"newValue":10},"Microsoft.VSTS.Scheduling.RemainingWork":{"oldValue":10,"newValue":8}}},{"id":4,"workItemId":5,"revisedDate":"2026-09-27T13:00:00Z","revisedBy":{"id":"author-1","displayName":"Ana"},"fields":{"System.ChangedDate":{"newValue":"2026-09-27T12:00:00Z"},"Microsoft.VSTS.Scheduling.CompletedWork":{"oldValue":8,"newValue":8}}},{"id":5,"workItemId":5,"revisedDate":"2026-09-27T16:00:00Z","revisedBy":{"id":"author-1","displayName":"Ana"},"fields":{"System.ChangedDate":{"newValue":"2026-09-27T16:00:00Z"},"Microsoft.VSTS.Scheduling.CompletedWork":{"oldValue":8,"newValue":11}}}]}""";
                 json = json.Replace("\"workItemId\":5", $"\"workItemId\":{taskId}", StringComparison.Ordinal);
                 if (MissingChangedDate) json = json.Replace("System.ChangedDate", "Ignored.ChangedDate", StringComparison.Ordinal);
+                if (InvalidOtherHours) json = json.Replace("\"oldValue\":10,\"newValue\":8", "\"oldValue\":\"inválido\",\"newValue\":8", StringComparison.Ordinal);
             }
             else throw new InvalidOperationException("Rota inesperada: " + path);
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };

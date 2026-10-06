@@ -20,6 +20,7 @@ public sealed class AzureDevOpsMock
     public int StatusProjetos { get; set; } = 200;
     public bool FalharSnapshot { get; set; }
     public bool FalharHistorico { get; set; }
+    public bool ExportFixture { get; set; }
     public ConcurrentQueue<string> Requisicoes { get; } = new();
     public ConcurrentQueue<string> RequisicoesInesperadas { get; } = new();
 
@@ -47,6 +48,12 @@ public sealed class AzureDevOpsMock
         {
             RequisicoesInesperadas.Enqueue($"Organização ou autenticação inesperada: {request.Method} {path}");
             await ResponderJsonAsync(route, new { message = "Unexpected test credentials" }, 401);
+            return;
+        }
+        if (!HasExpectedContext(path))
+        {
+            RequisicoesInesperadas.Enqueue($"Contexto de projeto, equipe ou sprint incorreto: {request.Method} {path}");
+            await ResponderJsonAsync(route, new { message = "Project, team or iteration not found" }, 404);
             return;
         }
 
@@ -77,6 +84,19 @@ public sealed class AzureDevOpsMock
                     fieldInstances = new[] { "CompletedWork", "OriginalEstimate", "RemainingWork" }.Select(name => new { referenceName = Scheduling + name })
                 },
                 var p when p.EndsWith("/Task/states", StringComparison.Ordinal) => new { value = new[] { new { name = "Active", category = "InProgress" } } },
+                var p when p.EndsWith("/workItems/1/updates", StringComparison.Ordinal) && ExportFixture => new { value = new[]
+                {
+                    Update(1, 1, DataHora(Inicio, 9), "CompletedWork", 0, 0.75m, "autor-externo", "João"),
+                    Update(1, 2, DataHora(Inicio, 10), "CompletedWork", 0.75m, 2, "autor-externo", "João"),
+                    Update(1, 3, DataHora(Inicio, 11), "CompletedWork", 2, 1),
+                    Update(1, 4, DataHora(Inicio, 12), "CompletedWork", 1, 1),
+                    Update(1, 5, DataHora(Inicio, 13), "RemainingWork", 12, 4)
+                } },
+                var p when p.EndsWith("/workItems/2/updates", StringComparison.Ordinal) && ExportFixture => new { value = new[]
+                {
+                    Update(2, 1, DataHora(Inicio.AddDays(1), 9), "CompletedWork", 0, 3),
+                    Update(2, 2, DataHora(Inicio.AddDays(2), 9), "CompletedWork", 3, 4)
+                } },
                 var p when p.EndsWith("/workItems/1/updates", StringComparison.Ordinal) => new { value = new[]
                 {
                     Update(1, 1, DataHora(Inicio, 12), "RemainingWork", 12, 4),
@@ -150,9 +170,27 @@ public sealed class AzureDevOpsMock
         return new { id, rev = 3, fields };
     }
 
-    private static object Update(int task, int id, string at, string field, int before, int after) => new
+    private static bool HasExpectedContext(string path) => path switch
     {
-        id, workItemId = task, revisedBy = new { id = "ana", displayName = "Ana" },
+        $"/{Organizacao}/_apis/projects" or $"/{Organizacao}/_apis/projects/p1/teams" => true,
+        $"/{Organizacao}/p1/t1/_apis/work/teamsettings" or
+        $"/{Organizacao}/p1/t1/_apis/work/teamsettings/iterations" or
+        $"/{Organizacao}/p1/t1/_apis/work/teamsettings/iterations/s1/capacities" or
+        $"/{Organizacao}/p1/t1/_apis/work/teamsettings/iterations/s1/teamdaysoff" or
+        $"/{Organizacao}/p1/t1/_apis/work/teamsettings/teamfieldvalues" => true,
+        $"/{Organizacao}/p1/_apis/wit/workitemtypes/Task" or
+        $"/{Organizacao}/p1/_apis/wit/workitemtypes/Task/states" or
+        $"/{Organizacao}/p1/_apis/wit/workItems/1/updates" or
+        $"/{Organizacao}/p1/_apis/wit/workItems/2/updates" or
+        $"/{Organizacao}/p1/_apis/wit/wiql" or
+        $"/{Organizacao}/p1/_apis/wit/workitemsbatch" => true,
+        _ => false
+    };
+
+    private static object Update(int task, int id, string at, string field, decimal before, decimal after,
+        string authorId = "ana", string authorName = "Ana") => new
+    {
+        id, workItemId = task, revisedBy = new { id = authorId, displayName = authorName },
         fields = new Dictionary<string, object>
         {
             ["System.ChangedDate"] = new { newValue = at },

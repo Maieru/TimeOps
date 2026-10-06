@@ -73,13 +73,28 @@ public sealed partial class AzureDevOpsGateway
             .Select(task => new HistoryTask(task.Id, task.Title, task.Url, task.Revision)).ToArray();
         if (tasks.Length > MaxChangedTasks)
             return Incomplete<EffortHistory>("Mais de 1.000 Tasks mudaram neste período. O histórico não foi exibido como se estivesse completo.");
-        var result = await ReadHistoryAsync(projectId, tasks, from, to, cancellationToken, remainingOnly: true);
+        var result = await ReadHistoryAsync(projectId, tasks, from, to, cancellationToken, onlyField: EffortField.Remaining);
         if (result.IsSuccess) cache.Set(key, result.Value, TimeSpan.FromMinutes(5));
         return result;
     }
 
+    public async Task<Result<EffortHistory>> LoadCompletedHistoryAsync(string projectId, string teamId, SprintSnapshot snapshot,
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    {
+        var config = ValidateConfig();
+        if (config.IsFailure) return Result<EffortHistory>.Failure(config.Error!);
+        if (to < from || to > snapshot.CollectedAt)
+            return Result<EffortHistory>.Failure(new("history.window", ErrorCategory.Validation, "O período da exportação é inválido."));
+        var tasks = snapshot.Tasks.DistinctBy(task => task.Id)
+            .Where(task => task.ChangedAt is null || task.ChangedAt >= from)
+            .Select(task => new HistoryTask(task.Id, task.Title, task.Url, task.Revision)).ToArray();
+        if (tasks.Length > MaxChangedTasks)
+            return Incomplete<EffortHistory>("Mais de 1.000 Tasks mudaram neste período. Reduza o intervalo da exportação.");
+        return await ReadHistoryAsync(projectId, tasks, from, to, cancellationToken, onlyField: EffortField.Completed);
+    }
+
     private async Task<Result<EffortHistory>> ReadHistoryAsync(string projectId, IReadOnlyList<HistoryTask> tasks,
-        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, bool remainingOnly = false)
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, EffortField? onlyField = null)
     {
         var results = new Result<IReadOnlyList<EffortChange>>[tasks.Count];
         Error? failure = null;
@@ -90,7 +105,7 @@ public sealed partial class AzureDevOpsGateway
         }, async (index, token) =>
         {
             if (Volatile.Read(ref failure) is not null) return;
-            results[index] = await LoadTaskUpdatesAsync(projectId, tasks[index], from, to, token, remainingOnly);
+            results[index] = await LoadTaskUpdatesAsync(projectId, tasks[index], from, to, token, onlyField);
             if (results[index].IsFailure) Interlocked.CompareExchange(ref failure, results[index].Error!, null);
         });
         if (failure is not null) return Result<EffortHistory>.Failure(failure);
@@ -139,7 +154,7 @@ public sealed partial class AzureDevOpsGateway
     }
 
     private async Task<Result<IReadOnlyList<EffortChange>>> LoadTaskUpdatesAsync(string projectId, HistoryTask task,
-        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, bool remainingOnly = false)
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken, EffortField? onlyField = null)
     {
         var updates = await LoadEffortUpdatesAsync(projectId, task, cancellationToken);
         if (updates.IsFailure) return Result<IReadOnlyList<EffortChange>>.Failure(updates.Error!);
@@ -147,7 +162,7 @@ public sealed partial class AzureDevOpsGateway
         foreach (var update in updates.Value)
         {
             var fields = Property(update, "fields");
-            if (remainingOnly && Property(fields, "Microsoft.VSTS.Scheduling.RemainingWork").ValueKind == JsonValueKind.Undefined) continue;
+            if (onlyField is { } selected && Property(fields, HistoryFields.Single(field => field.Field == selected).Name).ValueKind == JsonValueKind.Undefined) continue;
             var dateText = String(Property(fields, "System.ChangedDate"), "newValue")
                 ?? String(Property(fields, "System.AuthorizedDate"), "newValue");
             if (dateText is null || !DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture,
@@ -161,7 +176,7 @@ public sealed partial class AzureDevOpsGateway
             var actor = actorName is null ? null : new Person(actorId ?? actorName, actorName);
             foreach (var (fieldName, fieldKind) in HistoryFields)
             {
-                if (remainingOnly && fieldKind != EffortField.Remaining) continue;
+                if (onlyField is not null && fieldKind != onlyField) continue;
                 var field = Property(fields, fieldName);
                 if (field.ValueKind == JsonValueKind.Undefined) continue;
                 if (field.ValueKind != JsonValueKind.Object

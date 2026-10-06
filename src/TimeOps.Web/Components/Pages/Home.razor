@@ -58,7 +58,7 @@
 }
 else
 {
-<section class="filters" aria-label="Selecionar contexto">
+<section class="filters @(viewMode == DashboardView.Export ? "export-context-filters" : "")" aria-label="Selecionar contexto">
     <div class="field">
         <label for="project">Projeto</label>
         <select id="project" value="@projectId" @onchange="OnProjectChanged" disabled="@busy">
@@ -80,10 +80,13 @@ else
             @foreach (var sprint in sprints) { <option value="@sprint.Id">@sprint.Name</option> }
         </select>
     </div>
+    @if (viewMode != DashboardView.Export)
+    {
     <div class="field date-field">
         <label for="reference">Capacidade até</label>
         <input id="reference" type="date" value="@referenceText" max="@Service.Today.ToString("yyyy-MM-dd")" @onchange="OnReferenceChanged" disabled="@(busy || string.IsNullOrEmpty(sprintId))" />
     </div>
+    }
     <button class="refresh" type="button" @onclick="Refresh" disabled="@(busy || string.IsNullOrEmpty(sprintId))">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6M20 4v7h-7"/></svg>
         Atualizar
@@ -120,7 +123,10 @@ else
         {
             <span class="divider">/</span><span>@dashboard.Sprint.Start.Value.ToString("dd/MM") — @dashboard.Sprint.End.Value.ToString("dd/MM/yyyy")</span>
         }
-        <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
+        @if (viewMode != DashboardView.Export)
+        {
+            <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
+        }
     </div>
 
     @if (viewMode == DashboardView.Team)
@@ -256,6 +262,10 @@ else
             <div class="person-empty">Nenhuma pessoa com capacidade ou Task nesta sprint.</div>
         }
     }
+    else if (viewMode == DashboardView.Export)
+    {
+        <TaskExportPanel @key="(projectId, teamId, sprintId)" ProjectId="@projectId" TeamId="@teamId" Sprint="@dashboard.Sprint" Busy="@busy" />
+    }
     else if (viewMode == DashboardView.Features)
     {
         <FeatureHierarchy Features="@(dashboard.Features ?? [])" TaskCount="@dashboard.Team.TaskCount" Error="@dashboard.HierarchyError" />
@@ -362,6 +372,7 @@ else
     private string ViewTitle => viewMode switch
     {
         DashboardView.Person => "Pessoa",
+        DashboardView.Export => "Exportar Excel",
         DashboardView.Features => "Features e histórias",
         DashboardView.Timeline => "Timeline de features",
         DashboardView.History => "Histórico de alterações de tarefas",
@@ -371,6 +382,7 @@ else
     private string ViewSubtitle => viewMode switch
     {
         DashboardView.Person => "Capacidade, horas e Tasks de cada integrante da sprint.",
+        DashboardView.Export => "Selecione o período e a pessoa para baixar os registros de horas.",
         DashboardView.Features => "Horas registradas por feature, história de usuário e Task.",
         DashboardView.Timeline => "Prazos previstos das features em que cada pessoa participa.",
         DashboardView.History => "Alterações recentes nas horas das Tasks desta sprint.",
