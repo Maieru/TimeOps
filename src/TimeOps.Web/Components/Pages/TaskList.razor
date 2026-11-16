@@ -2,12 +2,12 @@
 @using TimeOps.Domain
 
 <div class="task-list">
-    @if (Tasks.Count == 0) { <p>Nenhuma Task atribuída.</p> }
+    @if (Tasks.Count == 0) { <p>Nenhuma implementação neste contexto.</p> }
     @foreach (var task in Tasks)
     {
         <div class="task-item">
             <a href="@task.Url" target="_blank" rel="noopener noreferrer">#@task.Id · @task.Title <span aria-hidden="true">↗</span></a>
-            <span>@task.State · Completed @(Format(task.Completed)) · Restante @(Format(task.Remaining)) · Estimativa @(Format(task.Original))</span>
+            <span>@task.State · Realizado @(Format(task.Completed)) · Restante @(Format(task.Remaining)) · Estimativa @(Format(task.Original))</span>
         </div>
     }
 </div>

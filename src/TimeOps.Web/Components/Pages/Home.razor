@@ -1,682 +1,81 @@
 @page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inherits WorkspacePage
 @implements IDisposable
-@using System.Globalization
-@using TimeOps.Application
-@using TimeOps.Domain
-@inject DashboardService Service
-@inject ILogger<Home> Logger
-@inject DashboardNavigationState Navigation
-
+@inject PlanningReports Reports
+@inject TimeProvider Clock
 <PageTitle>@ViewTitle · TimeOps</PageTitle>
-
-<header class="page-header">
-    <div>
-        <h1>@ViewTitle</h1>
-        <p>@ViewSubtitle</p>
-    </div>
-    @if (Service.HasConnection)
-    {
-        <div class="header-actions">
-            @if (dashboard is not null)
-            {
-                <div class="collected"><span class="collected-dot"></span> Coletado em @Service.LocalTime(dashboard.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</div>
-            }
-            <button class="connection-change" type="button" @onclick="ChangeConnection" disabled="@busy" title="Remove a credencial salva e permite conectar novamente">Esquecer e trocar conexão</button>
-        </div>
-    }
-</header>
-
-@if (!Service.HasConnection)
+<header class="page-header"><div><h1>@ViewTitle</h1><p>Capacidade planejada, horas trabalhadas e execução por produto.</p></div><a class="primary-action" href="@($"tarefas?team={TeamId}")">Criar tarefa</a></header>
+<Feedback Busy="Busy" Error="@Error" Message="@Message" />
+@if(Workspace is not null)
 {
-    <form class="connection-panel" @onsubmit="ConnectAsync" @onsubmit:preventDefault autocomplete="off">
-        <div class="connection-copy">
-            <h2>Conectar ao Azure DevOps</h2>
-            <p>Informe a organização e um PAT com permissões de leitura.</p>
-        </div>
-        <div class="field">
-            <label for="organization">Organização</label>
-            <input id="organization" type="text" @bind="organizationInput" @bind:event="oninput" placeholder="minha-organizacao" autocomplete="off" required />
-        </div>
-        <div class="field">
-            <label for="pat">Personal Access Token</label>
-            <input id="pat" type="password" @bind="patInput" @bind:event="oninput" autocomplete="off" required />
-        </div>
-        <button class="connect-button" type="submit" disabled="@busy">Conectar</button>
-        @if (Service.CanPersistConnection)
-        {
-            <label class="connection-remember"><input type="checkbox" @bind="rememberConnection" /><span>Manter conexão neste navegador <small>O PAT será salvo neste perfil do navegador. Use apenas em um perfil confiável.</small></span></label>
-        }
-        else
-        {
-            <p class="connection-storage-note">O armazenamento está indisponível. A conexão fica apenas nesta aba até recarregar.</p>
-        }
-        @if (savedConnectionNeedsRemoval)
-        {
-            <button class="connection-remove" type="button" @onclick="RemoveSavedConnection">Remover credencial salva</button>
-        }
-    </form>
-}
-else
-{
-<section class="filters @(viewMode == DashboardView.Export ? "export-context-filters" : "")" aria-label="Selecionar contexto">
-    <div class="field">
-        <label for="project">Projeto</label>
-        <select id="project" value="@projectId" @onchange="OnProjectChanged" disabled="@busy">
-            <option value="">Selecione o projeto</option>
-            @foreach (var project in projects) { <option value="@project.Id">@project.Name</option> }
-        </select>
-    </div>
-    <div class="field">
-        <label for="team">Equipe</label>
-        <select id="team" value="@teamId" @onchange="OnTeamChanged" disabled="@(busy || string.IsNullOrEmpty(projectId))">
-            <option value="">Selecione a equipe</option>
-            @foreach (var team in teams) { <option value="@team.Id">@team.Name</option> }
-        </select>
-    </div>
-    <div class="field">
-        <label for="sprint">Sprint</label>
-        <select id="sprint" value="@sprintId" @onchange="OnSprintChanged" disabled="@(busy || string.IsNullOrEmpty(teamId))">
-            <option value="">Selecione a sprint</option>
-            @foreach (var sprint in sprints) { <option value="@sprint.Id">@sprint.Name</option> }
-        </select>
-    </div>
-    @if (viewMode != DashboardView.Export)
-    {
-    <div class="field date-field">
-        <label for="reference">Capacidade até</label>
-        <input id="reference" type="date" value="@referenceText" max="@Service.Today.ToString("yyyy-MM-dd")" @onchange="OnReferenceChanged" disabled="@(busy || string.IsNullOrEmpty(sprintId))" />
-    </div>
-    }
-    <button class="refresh" type="button" @onclick="Refresh" disabled="@(busy || string.IsNullOrEmpty(sprintId))">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6M20 4v7h-7"/></svg>
-        Atualizar
-    </button>
+<section class="filters" aria-label="Contexto do painel">
+<div class="field"><label for="dashboard-team">Equipe</label><select id="dashboard-team" value="@TeamId" @onchange="ChangeTeam"><option value="0">Selecione</option>@foreach(var t in Workspace.Teams){<option value="@t.Id">@t.Name</option>}</select></div>
+<div class="field"><label for="dashboard-cycle">Ciclo</label><select id="dashboard-cycle" @bind="cycleId" @bind:after="CycleChanged"><option value="0">Todos os ciclos</option>@foreach(var c in Data.Cycles.Where(c=>c.TeamId==TeamId)){<option value="@c.Id">@c.Name</option>}</select></div>
+<div class="field"><label for="dashboard-sprint">Sprint</label><select id="dashboard-sprint" @bind="sprintId" @bind:after="LoadDashboard"><option value="0">Selecione</option>@foreach(var s in Sprints){<option value="@s.Id">@s.Name</option>}</select></div>
+<div class="field"><label for="dashboard-reference">Referência da capacidade</label><input id="dashboard-reference" type="date" @bind="reference" @bind:after="LoadDashboard" max="@Today.ToString("yyyy-MM-dd")" /></div><button class="refresh" @onclick="Refresh" disabled="@Busy">Atualizar dados</button>
 </section>
-}
-
-@if (busy)
+@if(sprintId!=0 && Navigation.Current is not (DashboardView.Burndown or DashboardView.Export))
 {
-    <div class="notice loading" role="status">Consultando o Azure DevOps…</div>
+<div class="field context-picker"><label for="dashboard-product">Produto</label><select id="dashboard-product" @bind="productId" @bind:after="LoadDashboard"><option value="0">Todos os produtos</option>@foreach(var p in Data.Products.Where(p=>p.TeamId==TeamId)){<option value="@p.Id">@p.Name</option>}</select></div>
 }
-@if (error is not null)
+@if(dashboard is null)
 {
-    <div class="notice error" role="alert"><strong>@errorTitle</strong> @error</div>
-}
-@if (stale && dashboard is not null)
-{
-    <div class="notice warning" role="status">Os números abaixo são da última coleta completa, indicada no cabeçalho. Tente atualizar novamente.</div>
-}
-
-@if (dashboard is null)
-{
-    <section class="empty-state">
-        <div class="empty-symbol"><span></span><span></span><span></span></div>
-        <h2>Seu acompanhamento começa aqui</h2>
-        <p>@(Service.HasConnection ? "Escolha um projeto, uma equipe e uma sprint para comparar a capacidade esperada com as horas em Completed." : "Conecte-se para consultar projetos, equipes e sprints disponíveis.")</p>
-    </section>
+<div class="empty-state"><h2>Planeje a primeira sprint</h2><p>Selecione uma equipe e uma sprint. O planejamento reúne ciclos, integrantes, funções, capacidades e produtos.</p><a href="@($"planejamento?team={TeamId}")">Abrir planejamento</a></div>
 }
 else
 {
-    <div class="context-line">
-        <span>@dashboard.Sprint.Name</span>
-        @if (dashboard.Sprint.Start is not null && dashboard.Sprint.End is not null)
-        {
-            <span class="divider">/</span><span>@dashboard.Sprint.Start.Value.ToString("dd/MM") — @dashboard.Sprint.End.Value.ToString("dd/MM/yyyy")</span>
-        }
-        @if (viewMode != DashboardView.Export)
-        {
-            <span class="divider">/</span><span>Capacidade até @dashboard.ReferenceDate.ToString("dd/MM/yyyy")</span>
-        }
-    </div>
-
-    @if (viewMode == DashboardView.Team)
-    {
-
-    <section class="summary" aria-label="Resumo da equipe">
-        <div class="summary-primary"><p>Horas registradas <MetricInfo Title="Horas registradas" Description="@MetricHelp.Completed" /></p><strong>@Hours(dashboard.Team.Completed)</strong><span>Completed nas Tasks desta sprint</span></div>
-        <div class="summary-item"><p>Esperadas até a referência <MetricInfo Title="Horas esperadas" Description="@MetricHelp.Expected" /></p><strong>@Hours(dashboard.Team.Expected)</strong><span>@(dashboard.Team.Expected is null ? "Capacidade incompleta" : "Capacidade dos dias decorridos")</span></div>
-        <div class="summary-item"><p>Diferença <MetricInfo Title="Diferença" Description="@MetricHelp.Difference" /></p><strong class="@VarianceClass(dashboard.Team.Difference)">@SignedHours(dashboard.Team.Difference)</strong><span>@CoverageCaption(dashboard.Team) <MetricInfo Title="Cobertura" Description="@MetricHelp.Coverage" /></span></div>
-        <div class="summary-item"><p>Trabalho restante <MetricInfo Title="Trabalho restante" Description="@MetricHelp.Remaining" /></p><strong>@Hours(dashboard.Team.Remaining)</strong><span>@(dashboard.Team.FutureCapacity is null ? "Capacidade futura indisponível" : $"{Hours(dashboard.Team.FutureCapacity)} de capacidade futura") <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span></div>
-    </section>
-
-    @if (dashboard.Warnings.Count > 0)
-    {
-        <details class="data-quality">
-            <summary>
-                <span class="data-quality-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></span>
-                <span class="data-quality-copy"><strong>@WarningCountLabel(dashboard.Warnings.Count)</strong><span>@(dashboard.Team.Expected is null ? "A capacidade da equipe está incompleta. Confira o que falta." : "Confira campos e Tasks que precisam de atenção.")</span></span>
-                <span class="data-quality-expand"><span class="when-closed">Ver avisos</span><span class="when-open">Recolher</span></span>
-            </summary>
-            <div class="warning-groups">
-                @foreach (var group in dashboard.Warnings.GroupBy(warning => warning.Code))
-                {
-                    <section class="warning-group">
-                        <h3>@WarningLabel(group.Key) <span>@group.Count()</span></h3>
-                        <ul>@foreach (var warning in group) { <li>@warning.Message</li> }</ul>
-                    </section>
-                }
-            </div>
-        </details>
-    }
-
-    <section class="data-section">
-        <div class="section-header"><div><h2>Pessoas da equipe</h2><p>Abra uma pessoa para conferir as Tasks que compõem os totais.</p><p class="table-hint">Role a tabela na horizontal para ver todas as métricas.</p></div><span class="section-count">@PeopleCountLabel(dashboard.People.Count) <MetricInfo Title="Pessoas da equipe" Description="@MetricHelp.PeopleCount" /></span></div>
-        <details class="mobile-metric-guide">
-            <summary>Como ler as métricas</summary>
-            <div>
-                <span>Completed <MetricInfo Title="Completed por pessoa" Description="@MetricHelp.PersonCompleted" /></span>
-                <span>Esperado <MetricInfo Title="Esperado por pessoa" Description="@MetricHelp.PersonExpected" /></span>
-                <span>Diferença <MetricInfo Title="Diferença por pessoa" Description="@MetricHelp.Difference" /></span>
-                <span>Cobertura <MetricInfo Title="Cobertura por pessoa" Description="@MetricHelp.Coverage" /></span>
-                <span>Estimativa <MetricInfo Title="Estimativa original por pessoa" Description="@MetricHelp.PersonOriginal" /></span>
-                <span>Restante <MetricInfo Title="Trabalho restante por pessoa" Description="@MetricHelp.PersonRemaining" /></span>
-                <span>Cap. total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></span>
-                <span>Cap. futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></span>
-                <span>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></span>
-            </div>
-        </details>
-        <div class="table-scroll">
-            <table>
-                <thead><tr>
-                    <th>Pessoa <MetricInfo Title="Pessoa e Tasks" Description="@MetricHelp.PersonTasks" /></th>
-                    <th>Completed <MetricInfo Title="Completed por pessoa" Description="@MetricHelp.PersonCompleted" /></th>
-                    <th>Esperado <MetricInfo Title="Esperado por pessoa" Description="@MetricHelp.PersonExpected" /></th>
-                    <th>Diferença <MetricInfo Title="Diferença por pessoa" Description="@MetricHelp.Difference" /></th>
-                    <th>Cobertura <MetricInfo Title="Cobertura por pessoa" Description="@MetricHelp.Coverage" /></th>
-                    <th>Estimativa <MetricInfo Title="Estimativa original por pessoa" Description="@MetricHelp.PersonOriginal" /></th>
-                    <th>Restante <MetricInfo Title="Trabalho restante por pessoa" Description="@MetricHelp.PersonRemaining" /></th>
-                    <th>Cap. total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></th>
-                    <th>Cap. futura <MetricInfo Title="Capacidade futura" Description="@MetricHelp.FutureCapacity" /></th>
-                    <th>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></th>
-                </tr></thead>
-                <tbody>
-                    @foreach (var person in dashboard.People)
-                    {
-                        <tr>
-                            <th scope="row"><button class="person-toggle" type="button" aria-expanded="@(expandedPeople.Contains(person.Person!.Id) ? "true" : "false")" @onclick="() => TogglePerson(person.Person.Id)"><span>@person.Person.Name</span><small>@TaskCountLabel(person.Tasks.Count)</small></button></th>
-                            <td data-label="Completed">@Hours(person.Completed)</td><td data-label="Esperado">@Hours(person.Expected)</td><td data-label="Diferença" class="@VarianceClass(person.Difference)">@SignedHours(person.Difference)</td><td data-label="Cobertura">@Percent(person.Coverage)</td><td data-label="Estimativa">@Hours(person.Original)</td><td data-label="Restante">@Hours(person.Remaining)</td><td data-label="Cap. total">@Hours(person.TotalCapacity)</td><td data-label="Cap. futura">@Hours(person.FutureCapacity)</td><td data-label="Saldo futuro" class="@VarianceClass(person.FutureBalance)">@SignedHours(person.FutureBalance)</td>
-                        </tr>
-                        @if (expandedPeople.Contains(person.Person.Id))
-                        {
-                            <tr class="team-task-details"><td colspan="10"><div class="team-task-heading">Tasks de @person.Person.Name</div><TaskList Tasks="person.Tasks" /></td></tr>
-                        }
-                    }
-                    @if (dashboard.Unassigned is not null)
-                    {
-                        <tr class="unassigned"><th scope="row"><button class="person-toggle" type="button" aria-expanded="@(unassignedExpanded ? "true" : "false")" @onclick="ToggleUnassigned"><span>Sem responsável</span><small>@TaskCountLabel(dashboard.Unassigned.Tasks.Count)</small></button></th><td data-label="Completed">@Hours(dashboard.Unassigned.Completed)</td><td data-label="Esperado">—</td><td data-label="Diferença">—</td><td data-label="Cobertura">—</td><td data-label="Estimativa">@Hours(dashboard.Unassigned.Original)</td><td data-label="Restante">@Hours(dashboard.Unassigned.Remaining)</td><td data-label="Cap. total">—</td><td data-label="Cap. futura">—</td><td data-label="Saldo futuro">—</td></tr>
-                        @if (unassignedExpanded)
-                        {
-                            <tr class="team-task-details"><td colspan="10"><div class="team-task-heading">Tasks sem responsável</div><TaskList Tasks="dashboard.Unassigned.Tasks" /></td></tr>
-                        }
-                    }
-                    @if (dashboard.People.Count == 0 && dashboard.Unassigned is null)
-                    {
-                        <tr><td colspan="10" class="no-data">Nenhuma pessoa com capacidade ou Task nesta sprint.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="secondary-stats" aria-label="Outras métricas">
-        <div><span>Capacidade total <MetricInfo Title="Capacidade total" Description="@MetricHelp.TotalCapacity" /></span><strong>@Hours(dashboard.Team.TotalCapacity)</strong></div>
-        <div><span>Saldo futuro <MetricInfo Title="Saldo futuro" Description="@MetricHelp.FutureBalance" /></span><strong class="@VarianceClass(dashboard.Team.FutureBalance)">@SignedHours(dashboard.Team.FutureBalance)</strong></div>
-        <div><span>Estimativa original <MetricInfo Title="Estimativa original" Description="@MetricHelp.Original" /></span><strong>@Hours(dashboard.Team.Original)</strong></div>
-        <div><span>Tasks concluídas <MetricInfo Title="Tasks concluídas" Description="@MetricHelp.CompletedTasks" /></span><strong>@dashboard.Team.CompletedTaskCount / @dashboard.Team.TaskCount</strong><small>@Percent(dashboard.Team.TaskProgress)</small></div>
-    </section>
-
-    <section class="state-counts" aria-label="Tasks por categoria de estado">
-        <span>Tasks por estado <MetricInfo Title="Tasks por estado" Description="@MetricHelp.StateCounts" /></span>
-        @foreach (var category in dashboard.Team.StateCategories.OrderBy(item => item.Key))
-        {
-            <span class="state-count">@CategoryLabel(category.Key) <strong>@category.Value</strong></span>
-        }
-        @if (dashboard.Team.StateCategories.Count == 0) { <span>Sem Tasks nesta sprint</span> }
-    </section>
-
-    <p class="method-note">Completed mostra o valor atual das Tasks atribuídas agora. A data escolhida altera a capacidade esperada, mas não reconstrói horas passadas. Estes dados não representam uma avaliação automática de produtividade.</p>
-    }
-    else if (viewMode == DashboardView.Person)
-    {
-        <section class="person-toolbar" aria-label="Selecionar pessoa">
-            <div><h2>Visão pessoal</h2><p>Escolha uma pessoa para conferir sua capacidade, horas e Tasks nesta sprint.</p></div>
-            @if (dashboard.People.Count > 0)
-            {
-                <div class="field person-picker">
-                    <label for="person">Integrante</label>
-                    <select id="person" value="@SelectedPerson?.Person?.Id" @onchange="OnPersonChanged">
-                        @foreach (var person in dashboard.People)
-                        {
-                            <option value="@person.Person!.Id">@person.Person.Name</option>
-                        }
-                    </select>
-                </div>
-            }
-        </section>
-        @if (SelectedPerson is { } selectedPerson)
-        {
-            <PersonView Person="selectedPerson" ReferenceDate="dashboard.ReferenceDate" GlobalWarnings="dashboard.Warnings" />
-        }
-        else
-        {
-            <div class="person-empty">Nenhuma pessoa com capacidade ou Task nesta sprint.</div>
-        }
-    }
-    else if (viewMode == DashboardView.Export)
-    {
-        <TaskExportPanel @key="(projectId, teamId, sprintId)" ProjectId="@projectId" TeamId="@teamId" Sprint="@dashboard.Sprint" Busy="@busy" />
-    }
-    else if (viewMode == DashboardView.Features)
-    {
-        <FeatureHierarchy Features="@(dashboard.Features ?? [])" TaskCount="@dashboard.Team.TaskCount" Error="@dashboard.HierarchyError" />
-    }
-    else if (viewMode == DashboardView.Timeline)
-    {
-        <FeatureTimelineView Dashboard="dashboard" Today="Service.Today" SelectedPersonId="@selectedPersonId" SelectedPersonIdChanged="OnTimelinePersonChanged" />
-    }
-    else if (viewMode == DashboardView.Burndown)
-    {
-        <BurndownView ProjectId="@projectId" TeamId="@teamId" Dashboard="@dashboard" />
-    }
-    else
-    {
-        <section class="history-panel" aria-label="Histórico de alterações de tarefas" aria-busy="@(busy ? "true" : "false")">
-            <div class="history-heading">
-                <div><h2>Alterações de tarefas</h2><p>Alterações nas horas das Tasks que estão nesta sprint e no escopo da equipe. A pessoa indicada é quem alterou o item no Azure DevOps.</p></div>
-                <div class="history-controls">
-                    <div class="field">
-                        <label for="history-period">Período</label>
-                        <select id="history-period" value="@historyDays" @onchange="OnHistoryPeriodChanged" disabled="@busy">
-                            <option value="1">24 horas</option>
-                            <option value="7">7 dias</option>
-                            <option value="30">30 dias</option>
-                        </select>
-                    </div>
-                @if (history is not null)
-                {
-                    <span>Coletado em @Service.LocalTime(history.CollectedAt).ToString("dd/MM 'às' HH:mm", Pt)</span>
-                }
-                </div>
-            </div>
-            @if (history is null)
-            {
-                <div class="history-empty">@(busy ? "Buscando alterações no Azure DevOps…" : "O histórico não pôde ser carregado. Use Atualizar para tentar novamente.")</div>
-            }
-            else if (history.Changes.Count == 0)
-            {
-                <div class="history-empty">Nenhuma alteração de horas foi encontrada neste período para as Tasks do escopo atual.</div>
-            }
-            else
-            {
-                <ol class="history-list">
-                    @foreach (var change in history.Changes)
-                    {
-                        <li class="history-entry">
-                            <time datetime="@change.ChangedAt.ToString("O")">@Service.LocalTime(change.ChangedAt).ToString("dd/MM 'às' HH:mm", Pt)</time>
-                            <div class="history-entry-main">
-                                <a href="@change.TaskUrl" target="_blank" rel="noopener noreferrer">#@change.TaskId · @change.TaskTitle</a>
-                                <span>@EffortLabel(change.Field) · @(change.ChangedBy?.Name ?? "Autor não informado")</span>
-                            </div>
-                            <div class="history-values"><strong class="@VarianceClass(change.Delta)">@SignedHours(change.Delta)</strong><span>@Hours(change.Before) → @Hours(change.After)</span></div>
-                        </li>
-                    }
-                </ol>
-            }
-            <p class="history-note">Cada linha mostra a diferença entre duas revisões do campo, não um apontamento de horas separado. Tasks que saíram da sprint ou da área da equipe não fazem parte desta consulta.</p>
-        </section>
-    }
+<div class="context-line"><span>@Data.Teams.Single(t=>t.Id==TeamId).Name</span><span>@dashboard.Sprint.Name</span><span>@dashboard.Sprint.Start?.ToString("dd/MM/yyyy") a @dashboard.Sprint.End?.ToString("dd/MM/yyyy")</span></div>
+@if(dashboard.Warnings.Count>0){<details class="notice warning"><summary>@dashboard.Warnings.Count avisos sobre os dados</summary><ul>@foreach(var warning in dashboard.Warnings){<li>@warning.Message</li>}</ul></details>}
+@if(Navigation.Current==DashboardView.Team)
+{
+<section class="summary" aria-label="Resumo da sprint"><div class="summary-primary"><p>Horas realizadas</p><strong>@H(dashboard.Team.Completed)</strong><span>Apontamentos desta sprint</span></div><div><p>Capacidade esperada</p><strong>@H(dashboard.Team.Expected)</strong><span>Até @reference.ToString("dd/MM/yyyy")</span></div><div><p>Trabalho restante</p><strong>@H(dashboard.Team.Remaining)</strong><span>Estimado no TimeOps</span></div><div><p>Capacidade futura</p><strong>@H(dashboard.Team.FutureCapacity)</strong><span>Após a referência</span></div></section>
+<section class="planning-section"><h2>Pessoas da equipe</h2><div class="table-scroll"><table><thead><tr><th>Pessoa</th><th>Realizado</th><th>Esperado</th><th>Diferença</th><th>Cobertura</th><th>Estimativa</th><th>Restante</th><th>Capacidade total</th><th>Saldo futuro</th></tr></thead><tbody>@foreach(var p in dashboard.People){<tr><th><details><summary>@p.Person!.Name</summary><TaskList Tasks="p.Tasks" /></details></th><td data-label="Realizado">@H(p.Completed)</td><td data-label="Esperado">@H(p.Expected)</td><td data-label="Diferença">@H(p.Difference)</td><td data-label="Cobertura">@(p.Coverage?.ToString("N1")+ (p.Coverage is null?"—":"%"))</td><td data-label="Estimativa">@H(p.Original)</td><td data-label="Restante">@H(p.Remaining)</td><td data-label="Capacidade total">@H(p.TotalCapacity)</td><td data-label="Saldo futuro">@H(p.FutureBalance)</td></tr>}@if(dashboard.Unassigned is { } unassigned){<tr><th><details><summary>Sem responsável único</summary><TaskList Tasks="unassigned.Tasks" /></details></th><td>—</td><td>—</td><td>—</td><td>—</td><td data-label="Estimativa">@H(unassigned.Original)</td><td data-label="Restante">@H(unassigned.Remaining)</td><td>—</td><td>—</td></tr>}</tbody></table></div></section>
+<p class="method-note">Realizado soma apontamentos de quem trabalhou, inclusive antes de uma troca de responsável. Estimativa e restante seguem as implementações atualmente planejadas e seus responsáveis no GitHub. O filtro de produto não divide a capacidade da equipe. Estes indicadores apoiam o planejamento.</p>
 }
-
-@code {
-    private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
-    private static class MetricHelp
-    {
-        public const string Completed = "Soma do Completed Work das Tasks desta sprint e do escopo da equipe, inclusive concluídas e sem responsável. É o valor atual no DevOps, mesmo se a data de referência for anterior. Campos vazios entram como zero e geram aviso.";
-        public const string PersonCompleted = "Soma do Completed Work das Tasks atualmente atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
-        public const string PeopleCount = "Quantidade de pessoas com capacidade cadastrada ou com Tasks atribuídas nesta sprint. Tasks sem responsável aparecem em uma linha separada e não aumentam esta contagem.";
-        public const string PersonTasks = "Cada linha reúne a capacidade cadastrada da pessoa e as Tasks atualmente atribuídas a ela no escopo da sprint e da equipe. A contagem ao lado do nome mostra quantas Tasks compõem seus totais; abra a linha para ver os itens.";
-        public const string Expected = "Soma da capacidade diária cadastrada nas atividades de cada pessoa multiplicada pelos dias de trabalho da sprint até a data de referência, descontadas folgas individuais e da equipe. Um travessão indica capacidade ausente ou Tasks sem responsável, impedindo um total completo.";
-        public const string PersonExpected = "Capacidade diária desta pessoa multiplicada pelos dias de trabalho da sprint até a data de referência, descontadas as folgas. Um travessão indica que sua capacidade não está cadastrada.";
-        public const string Difference = "Horas registradas menos horas esperadas. Valor negativo indica menos horas registradas que a capacidade acumulada; positivo indica mais. Um travessão significa que algum dado necessário está indisponível.";
-        public const string Coverage = "Horas registradas divididas pelas horas esperadas, em porcentagem. Não se aplica quando a expectativa é zero ou está indisponível.";
-        public const string Remaining = "Soma do Remaining Work atual das Tasks desta sprint e do escopo da equipe, inclusive sem responsável e concluídas que ainda tenham valor restante. Não é a diferença entre horas esperadas e registradas. Campos vazios entram como zero e geram aviso.";
-        public const string PersonRemaining = "Soma do Remaining Work atual das Tasks atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
-        public const string TotalCapacity = "Capacidade diária multiplicada por todos os dias de trabalho da sprint, descontadas as folgas. O total da equipe fica indisponível se faltar capacidade de alguém ou houver Tasks sem responsável.";
-        public const string FutureCapacity = "Capacidade dos dias de trabalho após a data de referência até o fim da sprint, descontadas as folgas. No total da equipe, um travessão indica capacidade ausente ou Tasks sem responsável.";
-        public const string FutureBalance = "Capacidade futura menos Remaining Work. Valor negativo indica mais trabalho restante que capacidade futura. Um travessão indica capacidade futura ou Remaining Work indisponível.";
-        public const string Original = "Soma do Original Estimate das Tasks desta sprint e do escopo da equipe. É uma estimativa inicial, separada das horas registradas e restantes; campos vazios entram como zero e geram aviso.";
-        public const string PersonOriginal = "Soma do Original Estimate das Tasks atualmente atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
-        public const string CompletedTasks = "Quantidade de Tasks na categoria de estado Concluídas sobre todas as Tasks da sprint no escopo da equipe. A porcentagem é calculada por quantidade, não por horas.";
-        public const string StateCounts = "Quantidade atual de Tasks em cada categoria de estado do Azure DevOps. Cada Task é contada uma vez.";
-    }
-    private IReadOnlyList<NamedItem> projects = [];
-    private IReadOnlyList<NamedItem> teams = [];
-    private IReadOnlyList<Sprint> sprints = [];
-    private string projectId = "";
-    private string teamId = "";
-    private string sprintId = "";
-    private string referenceText = "";
-    private string organizationInput = "";
-    private string patInput = "";
-    private bool rememberConnection;
-    private bool savedConnectionNeedsRemoval;
-    private Dashboard? dashboard;
-    private EffortHistory? history;
-    private int historyDays = 1;
-    private string? error;
-    private string errorTitle = "Não foi possível atualizar.";
-    private bool busy;
-    private bool stale;
-    private bool historyLoadPending;
-    private DashboardView viewMode => Navigation.Current;
-    private string ViewTitle => viewMode switch
-    {
-        DashboardView.Person => "Pessoa",
-        DashboardView.Export => "Exportar Excel",
-        DashboardView.Features => "Features e histórias",
-        DashboardView.Timeline => "Timeline de features",
-        DashboardView.History => "Histórico de alterações de tarefas",
-        DashboardView.Burndown => "Burndown da iteração",
-        _ => "Equipe"
-    };
-    private string ViewSubtitle => viewMode switch
-    {
-        DashboardView.Person => "Capacidade, horas e Tasks de cada integrante da sprint.",
-        DashboardView.Export => "Selecione o período e a pessoa para baixar os registros de horas.",
-        DashboardView.Features => "Horas registradas por feature, história de usuário e Task.",
-        DashboardView.Timeline => "Prazos previstos das features em que cada pessoa participa.",
-        DashboardView.History => "Alterações recentes nas horas das Tasks desta sprint.",
-        DashboardView.Burndown => "Evolução diária do trabalho restante ao longo da sprint.",
-        _ => "Capacidade e horas registradas, diretamente do Azure DevOps."
-    };
-    private string? selectedPersonId;
-    private readonly HashSet<string> expandedPeople = new(StringComparer.OrdinalIgnoreCase);
-    private bool unassignedExpanded;
-    private PersonMetrics? SelectedPerson => dashboard?.People.FirstOrDefault(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase))
-        ?? dashboard?.People.FirstOrDefault();
-    private void OnPersonChanged(ChangeEventArgs args) => selectedPersonId = args.Value?.ToString();
-    private void OnTimelinePersonChanged(string? personId) => selectedPersonId = personId;
-    private void TogglePerson(string id)
-    {
-        if (!expandedPeople.Add(id)) expandedPeople.Remove(id);
-    }
-    private void ToggleUnassigned() => unassignedExpanded = !unassignedExpanded;
-
-    private void OnViewChanged(DashboardView view)
-    {
-        _ = InvokeAsync(async () =>
-        {
-            if (view == DashboardView.History && dashboard is not null && history is null)
-            {
-                if (busy) historyLoadPending = true;
-                else await LoadHistory();
-            }
-            else if (view != DashboardView.History) historyLoadPending = false;
-            StateHasChanged();
-        });
-    }
-
-    private async Task OnHistoryPeriodChanged(ChangeEventArgs args)
-    {
-        if (busy || !int.TryParse(args.Value?.ToString(), out var days) || days is not (1 or 7 or 30) || days == historyDays) return;
-        historyDays = days;
-        history = null;
-        await LoadHistory();
-    }
-
-    private async Task LoadHistory()
-    {
-        var sprint = sprints.FirstOrDefault(item => item.Id == sprintId);
-        if (sprint is null) return;
-        busy = true;
-        error = null;
-        try
-        {
-            var result = await Service.GetEffortHistoryAsync(projectId, teamId, sprint, historyDays);
-            if (result.IsFailure)
-            {
-                history = null;
-                errorTitle = "Não foi possível carregar o histórico.";
-                error = result.Error!.Message;
-            }
-            else history = result.Value;
-        }
-        catch (Exception exception)
-        {
-            Logger.LogError(exception, "Falha inesperada ao carregar histórico de horas");
-            history = null;
-            errorTitle = "Não foi possível carregar o histórico.";
-            error = "Ocorreu um erro inesperado. Tente atualizar novamente.";
-        }
-        finally { busy = false; historyLoadPending = false; }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        Navigation.ViewChanged += OnViewChanged;
-        UpdateNavigationContext();
-        referenceText = Service.Today.AddDays(-1).ToString("yyyy-MM-dd");
-        rememberConnection = Service.CanPersistConnection;
-        var restored = Service.RestoreConnection();
-        if (restored.IsFailure)
-        {
-            savedConnectionNeedsRemoval = true;
-            errorTitle = "Não foi possível recuperar a conexão salva.";
-            error = restored.Error!.Message;
-        }
-        organizationInput = Service.Organization;
-        if (!Service.HasConnection) return;
-        await LoadProjects();
-    }
-
-    private async Task LoadProjects()
-    {
-        busy = true;
-        try
-        {
-            var result = await Service.ListProjectsAsync();
-            if (result.IsFailure) error = result.Error!.Message;
-            else projects = result.Value;
-        }
-        catch (Exception exception)
-        {
-            Logger.LogError(exception, "Falha inesperada ao listar projetos");
-            error = "Ocorreu um erro inesperado. Recarregue a página.";
-        }
-        finally { busy = false; }
-    }
-
-    private async Task ConnectAsync()
-    {
-        var result = Service.ConfigureConnection(organizationInput, patInput, rememberConnection);
-        patInput = "";
-        error = null;
-        errorTitle = "Não foi possível conectar.";
-        if (result.IsFailure) { error = result.Error!.Message; return; }
-        savedConnectionNeedsRemoval = false;
-        await LoadProjects();
-    }
-
-    private void RemoveSavedConnection()
-    {
-        var result = Service.ForgetConnection();
-        errorTitle = "Não foi possível remover a credencial salva.";
-        error = result.IsFailure ? result.Error!.Message : null;
-        savedConnectionNeedsRemoval = result.IsFailure;
-    }
-
-    private void ChangeConnection()
-    {
-        organizationInput = Service.Organization;
-        var forgotten = Service.ForgetConnection();
-        savedConnectionNeedsRemoval = forgotten.IsFailure;
-        patInput = "";
-        projects = [];
-        teams = [];
-        sprints = [];
-        projectId = teamId = sprintId = "";
-        dashboard = null;
-        history = null;
-        historyLoadPending = false;
-        errorTitle = "Não foi possível esquecer a conexão.";
-        error = forgotten.IsFailure ? forgotten.Error!.Message : null;
-        stale = false;
-        Navigation.Select(DashboardView.Team);
-        UpdateNavigationContext();
-        selectedPersonId = null;
-    }
-
-    private async Task OnProjectChanged(ChangeEventArgs args)
-    {
-        projectId = args.Value?.ToString() ?? "";
-        teamId = sprintId = "";
-        teams = [];
-        sprints = [];
-        dashboard = null;
-        history = null;
-        stale = false;
-        error = null;
-        UpdateNavigationContext();
-        if (projectId.Length == 0) return;
-        busy = true;
-        try
-        {
-            var result = await Service.ListTeamsAsync(projectId);
-            if (result.IsFailure) error = result.Error!.Message;
-            else teams = result.Value;
-        }
-        catch (Exception) { error = "Não foi possível carregar as equipes. Tente novamente."; }
-        finally { busy = false; }
-    }
-
-    private async Task OnTeamChanged(ChangeEventArgs args)
-    {
-        teamId = args.Value?.ToString() ?? "";
-        sprintId = "";
-        sprints = [];
-        dashboard = null;
-        history = null;
-        stale = false;
-        error = null;
-        UpdateNavigationContext();
-        if (teamId.Length == 0) return;
-        busy = true;
-        try
-        {
-            var result = await Service.ListSprintsAsync(projectId, teamId);
-            if (result.IsFailure) error = result.Error!.Message;
-            else
-            {
-                sprints = result.Value;
-                var today = Service.Today;
-                var current = sprints.Where(sprint => sprint.Start <= today && sprint.End >= today).ToArray();
-                if (current.Length == 1) { sprintId = current[0].Id; UpdateNavigationContext(); await Load(false); }
-            }
-        }
-        catch (Exception) { error = "Não foi possível carregar as sprints. Tente novamente."; }
-        finally { busy = false; }
-    }
-
-    private async Task OnSprintChanged(ChangeEventArgs args)
-    {
-        sprintId = args.Value?.ToString() ?? "";
-        dashboard = null;
-        history = null;
-        stale = false;
-        error = null;
-        UpdateNavigationContext();
-        if (sprintId.Length > 0) await Load(false);
-    }
-
-    private async Task OnReferenceChanged(ChangeEventArgs args)
-    {
-        referenceText = args.Value?.ToString() ?? "";
-        if (sprintId.Length > 0) await Load(false);
-    }
-
-    private Task Refresh() => Load(true);
-
-    private void UpdateNavigationContext() => Navigation.SetContext(
-        projects.FirstOrDefault(item => item.Id == projectId)?.Name,
-        teams.FirstOrDefault(item => item.Id == teamId)?.Name,
-        sprints.FirstOrDefault(item => item.Id == sprintId)?.Name);
-
-    public void Dispose() => Navigation.ViewChanged -= OnViewChanged;
-
-    private async Task Load(bool force)
-    {
-        var sprint = sprints.FirstOrDefault(item => item.Id == sprintId);
-        if (sprint is null) return;
-        if (!DateOnly.TryParseExact(referenceText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var reference))
-        { error = "Informe uma data de referência válida."; stale = dashboard is not null; return; }
-        busy = true;
-        error = null;
-        try
-        {
-            var result = await Service.GetDashboardAsync(projectId, teamId, sprint, reference, force);
-            if (result.IsFailure) { error = result.Error!.Message; stale = dashboard is not null; }
-            else
-            {
-                dashboard = result.Value;
-                expandedPeople.Clear();
-                unassignedExpanded = false;
-                history = null;
-                stale = false;
-                if (selectedPersonId is not null && !dashboard.People.Any(person => string.Equals(person.Person?.Id, selectedPersonId, StringComparison.OrdinalIgnoreCase)))
-                    selectedPersonId = dashboard.People.FirstOrDefault()?.Person?.Id;
-                if (viewMode == DashboardView.History)
-                {
-                    historyLoadPending = false;
-                    await LoadHistory();
-                }
-            }
-        }
-        catch (Exception) { error = "Ocorreu um erro inesperado. Tente atualizar novamente."; stale = dashboard is not null; }
-        finally
-        {
-            busy = false;
-            if (historyLoadPending)
-            {
-                historyLoadPending = false;
-                if (viewMode == DashboardView.History && dashboard is not null && history is null)
-                    await LoadHistory();
-            }
-        }
-    }
-
-    private static string Hours(decimal? value) => value is null ? "—" : $"{value.Value.ToString("N2", Pt)} h";
-    private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
-    private static string Percent(decimal? value) => value is null ? "N/A" : $"{value.Value.ToString("N2", Pt)}%";
-    private static string WarningCountLabel(int count) => $"{count} {(count == 1 ? "aviso" : "avisos")} sobre os dados";
-    private static string PeopleCountLabel(int count) => $"{count} {(count == 1 ? "pessoa" : "pessoas")}";
-    private static string TaskCountLabel(int count) => $"{count} {(count == 1 ? "Task" : "Tasks")}";
-    private static string CoverageCaption(TeamMetrics team) => team.Coverage is not null
-        ? $"{team.Coverage.Value.ToString("N2", Pt)}% de cobertura"
-        : team.Expected == 0 && team.Completed is not null ? "Cobertura não aplicável" : "Cobertura indisponível";
-    private static string VarianceClass(decimal? value) => value is null ? "" : value < 0 ? "negative" : value > 0 ? "positive" : "";
-    private static string WarningLabel(string code) => code switch
-    {
-        "capacity.missing" => "Capacidade ausente",
-        "completed.empty" => "Completed vazio",
-        "original.empty" => "Estimativa original vazia",
-        "remaining.empty" => "Trabalho restante vazio",
-        "completed.remaining" => "Tasks concluídas com trabalho restante",
-        "field.completed.missing" => "Completed indisponível",
-        "field.original.missing" => "Estimativa original indisponível",
-        "field.remaining.missing" => "Trabalho restante indisponível",
-        "hierarchy.unavailable" => "Hierarquia indisponível",
-        _ => "Outros avisos"
-    };
-    private static string CategoryLabel(string category) => category switch
-    {
-        "Proposed" => "Propostas", "InProgress" => "Em andamento", "Resolved" => "Resolvidas",
-        "Completed" => "Concluídas", "Removed" => "Removidas", _ => category
-    };
-    private static string EffortLabel(EffortField field) => field switch
-    {
-        EffortField.Completed => "Horas registradas (Completed)",
-        EffortField.Original => "Estimativa original",
-        EffortField.Remaining => "Trabalho restante",
-        _ => "Horas"
-    };
+else if(Navigation.Current==DashboardView.Person)
+{
+<div class="field context-picker"><label for="dashboard-person">Pessoa</label><select id="dashboard-person" @bind="personId">@foreach(var p in dashboard.People){<option value="@p.Person!.Id">@p.Person.Name</option>}</select></div>
+@if(dashboard.People.FirstOrDefault(p=>p.Person!.Id==personId) is { } person){<PersonView Person="person" ReferenceDate="reference" />}
+}
+else if(Navigation.Current==DashboardView.Features){<FeatureHierarchy Features="@(dashboard.Features??[])" TaskCount="dashboard.Team.TaskCount" Error="@dashboard.HierarchyError" />}
+else if(Navigation.Current==DashboardView.Timeline){<FeatureTimelineView Dashboard="@TimelineDashboard()" Today="Today" SelectedPersonId="@timelinePerson" SelectedPersonIdChanged="@(id=>timelinePerson=id)" />}
+else if(Navigation.Current==DashboardView.Burndown){<BurndownView @key="refreshKey" ProjectId="local" TeamId="@TeamId.ToString()" Dashboard="dashboard" TimeZoneId="@Zone" />}
+else if(Navigation.Current==DashboardView.Export){<TaskExportPanel @key="sprintId" ProjectId="local" TeamId="@TeamId.ToString()" Sprint="dashboard.Sprint" TimeZoneId="@Zone" />}
+else if(Navigation.Current==DashboardView.History)
+{
+<section class="planning-section"><h2>Alterações de esforço e planejamento</h2><p>Histórico registrado no TimeOps, com autoria e valores anteriores.</p><div class="table-scroll compact-table"><table><thead><tr><th>Data / pessoa</th><th>Implementação</th><th>Alteração</th><th>Antes</th><th>Depois</th></tr></thead><tbody>@foreach(var e in Data.Events.Where(e=>e.FromSprintId==sprintId||e.ToSprintId==sprintId).OrderByDescending(e=>e.At).ThenByDescending(e=>e.Id)){var i=Data.Implementations.Single(i=>i.Id==e.ImplementationId);<tr><th>@TimeZoneInfo.ConvertTime(e.At,TimeZoneInfo.FindSystemTimeZoneById(Zone)).ToString("dd/MM/yyyy HH:mm")<small>@UserName(e.ActorId)</small></th><td>@Data.Tasks.Single(t=>t.Id==i.TaskId).Title<small>@Data.Products.Single(p=>p.Id==i.ProductId).Name</small></td><td>@EventLabel(e)</td><td>@(e.Kind=="scope"?SprintName(e.FromSprintId):H(e.Before))</td><td>@(e.Kind=="scope"?SprintName(e.ToSprintId):H(e.After))</td></tr>}</tbody></table></div></section>
+}
+}
+}
+@code{
+private int cycleId,sprintId,productId,refreshKey,reportGeneration;private DateOnly reference=DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);private string personId="";private string? timelinePerson;private Dashboard? dashboard;
+private string Zone=>Data.Teams.SingleOrDefault(t=>t.Id==TeamId)?.TimeZoneId??"America/Sao_Paulo";
+private DateOnly Today=>DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Clock.GetUtcNow(),TimeZoneInfo.FindSystemTimeZoneById(Zone)).DateTime);
+private IEnumerable<PlanningSprint> Sprints=>Data.Sprints.Where(s=>s.TeamId==TeamId&&(cycleId==0||s.CycleId==cycleId)).OrderByDescending(s=>s.Start);
+private string ViewTitle=>Navigation.Current switch{DashboardView.Person=>"Acompanhamento por pessoa",DashboardView.Features=>"Horas por tarefa",DashboardView.Timeline=>"Timeline das tarefas",DashboardView.History=>"Histórico",DashboardView.Burndown=>"Burndown da sprint",DashboardView.Export=>"Exportar horas",_=>"Painel da equipe"};
+protected override void OnInitialized()=>Navigation.Changed+=Changed;
+protected override async Task OnContextLoadedAsync(){cycleId=0;productId=0;reference=Today.AddDays(-1);SelectSprint();await LoadDashboard();}
+private void Changed()=>_=InvokeAsync(StateHasChanged);
+public void Dispose()=>Navigation.Changed-=Changed;
+private void SelectSprint(){var current=Sprints.Where(s=>s.Start<=Today&&s.End>=Today).ToArray();sprintId=current.Length==1?current[0].Id:Sprints.FirstOrDefault()?.Id??0;}
+private Task ChangeTeam(ChangeEventArgs e)=>TeamChanged(e);
+private async Task CycleChanged(){SelectSprint();await LoadDashboard();}
+private async Task LoadDashboard()
+{
+    var generation=++reportGeneration;
+    var team=TeamId;var sprint=sprintId;
+    dashboard=null;
+    if(sprint==0||team==0||Workspace is null)return;
+    var result=await Reports.DashboardAsync(team,sprint,reference,productId==0?null:productId);
+    if(generation!=reportGeneration||TeamId!=team||Workspace is null)return;
+    var selectedTeam=Data.Teams.SingleOrDefault(t=>t.Id==team);
+    if(selectedTeam is null)return;
+    if(result.IsFailure)Error=result.Error!.Message;
+    else{dashboard=result.Value;Error=null;if(!dashboard.People.Any(p=>p.Person!.Id==personId))personId=dashboard.People.FirstOrDefault()?.Person?.Id??"";Navigation.SetContext("GitHub Projects",selectedTeam.Name,dashboard.Sprint.Name);}
+}
+private async Task Refresh(){await Reload();await LoadDashboard();refreshKey++;}
+private string SprintName(int? id)=>id is null?"Backlog":Data.Sprints.SingleOrDefault(s=>s.Id==id)?.Name??"Sprint indisponível";
+private static string EventLabel(PlanningEvent e)=>e.Kind switch{"remaining"=>"Trabalho restante","original"=>"Estimativa","completed"=>"Apontamento de horas","scope"=>"Replanejamento",_=>e.Kind};
+private Dashboard TimelineDashboard(){var groups=Data.Tasks.Where(t=>t.TeamId==TeamId).Select(t=>{var implementations=Data.Implementations.Where(i=>i.TaskId==t.Id&&(productId==0||i.ProductId==productId)).ToArray();var periods=implementations.Where(i=>i.SprintId is not null).Select(i=>Data.Sprints.Single(s=>s.Id==i.SprintId)).ToArray();var parent=new ParentWorkItem(t.Id,t.Title,"Feature",null,$"/tarefas?team={TeamId}",periods.Length==0?null:periods.Min(s=>s.Start),periods.Length==0?null:periods.Max(s=>s.End));var work=implementations.Select(i=>{var ids=JsonSerializer.Deserialize<string[]>(i.AssigneeIdsJson)!;return new TaskWork(i.Id,Data.Products.Single(p=>p.Id==i.ProductId).Name,ids.Length==1?new Person(ids[0],UserName(ids[0])):null,i.StatusName,i.StateCategory,"","",0,i.Original,i.Remaining,i.IssueUrl??"/tarefas",t.Id);}).ToArray();return new FeatureEffort(parent,[new StoryEffort(null,work,0)],0);}).Where(g=>g.Stories.Any(s=>s.Tasks.Count>0)).ToArray();return dashboard! with{Features=groups};}
 }

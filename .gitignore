@@ -626,3 +626,10 @@ $RECYCLE.BIN/
 .DS_Store
 
 _NCrunch*
+
+# TimeOps server credentials and local verification artifacts
+.env
+.env.*
+!.env.example
+.secrets/
+.impeccable/review/

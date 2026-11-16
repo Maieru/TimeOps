@@ -1,11 +1,11 @@
 @using System.Globalization
 @using TimeOps.Domain
 
-<section class="timeline-panel" aria-label="Planejamento das features">
+<section class="timeline-panel" aria-label="Planejamento das tarefas">
     <div class="timeline-heading">
         <div>
             <h2>Planejamento por pessoa</h2>
-            <p>Features com ao menos uma Task atribuída à pessoa nesta sprint e equipe. As barras mostram todo o período previsto da feature.</p>
+            <p>Tarefas com implementações planejadas na equipe e produtos selecionados. As barras mostram todo o período previsto da tarefa.</p>
         </div>
         <div class="field timeline-picker">
             <label for="timeline-person">Integrante</label>
@@ -26,7 +26,7 @@
     else
     {
         <div class="timeline-summary" role="status" aria-live="polite">
-            <span><strong>@timeline.Rows.Count</strong> @(timeline.Rows.Count == 1 ? "feature" : "features") · @PersonName</span>
+            <span><strong>@timeline.Rows.Count</strong> @(timeline.Rows.Count == 1 ? "tarefa" : "tarefas") · @PersonName</span>
             @if (timeline.Start is { } start && timeline.End is { } end)
             {
                 <span>@DateLabel(start) — @DateLabel(end)</span>
@@ -35,22 +35,22 @@
 
         @if (timeline.TasksWithoutFeature > 0)
         {
-            <p class="timeline-warning">@timeline.TasksWithoutFeature @(timeline.TasksWithoutFeature == 1 ? "Task sem feature vinculada não aparece" : "Tasks sem feature vinculada não aparecem") no gráfico. Confira os vínculos em Features e histórias.</p>
+            <p class="timeline-warning">@timeline.TasksWithoutFeature @(timeline.TasksWithoutFeature == 1 ? "Implementação sem tarefa vinculada não aparece" : "Implementações sem tarefa vinculada não aparecem") no gráfico. Confira os vínculos em Tarefas e implementações.</p>
         }
 
         @if (timeline.Rows.Count == 0)
         {
-            <div class="timeline-empty">Nenhuma feature com Tasks @(SelectedPersonId is null ? "da equipe" : "desta pessoa") nesta sprint. Escolha outro integrante ou outra sprint.</div>
+            <div class="timeline-empty">Nenhuma tarefa com implementações @(SelectedPersonId is null ? "da equipe" : "desta pessoa") nesta sprint. Escolha outro integrante ou outra sprint.</div>
         }
         else
         {
             <p class="timeline-hint" id="timeline-hint">Duração em dias corridos, incluindo início e fim. Role o gráfico na horizontal para ver todo o período.</p>
-            <div class="timeline-scroll" tabindex="0" role="region" aria-label="Gráfico de Gantt das features" aria-describedby="timeline-hint">
+            <div class="timeline-scroll" tabindex="0" role="region" aria-label="Gráfico de Gantt das tarefas" aria-describedby="timeline-hint">
                 <table class="timeline-table">
-                    <caption class="timeline-sr-only">Planejamento das features de @PersonName. Datas previstas e duração em dias corridos.</caption>
+                    <caption class="timeline-sr-only">Planejamento das tarefas de @PersonName. Datas previstas e duração em dias corridos.</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="timeline-identity-header">Feature / período previsto</th>
+                            <th scope="col" class="timeline-identity-header">Tarefa / período previsto</th>
                             <th scope="col" class="timeline-axis-header">
                                 @if (timeline.Start is not null)
                                 {
@@ -73,7 +73,7 @@
                         {
                             <tr @key="row.Feature.Id">
                                 <th scope="row" class="timeline-identity">
-                                    <a href="@row.Feature.Url" target="_blank" rel="noopener noreferrer">#@row.Feature.Id · @row.Feature.Title<span class="timeline-sr-only"> (abrir no Azure DevOps)</span></a>
+                                    <a href="@row.Feature.Url" target="_blank" rel="noopener noreferrer">#@row.Feature.Id · @row.Feature.Title<span class="timeline-sr-only"> (abrir no TimeOps)</span></a>
                                     <span class="timeline-row-dates">@DateLabel(row.Feature.StartDate) → @DateLabel(row.Feature.EndDate)</span>
                                     <span class="timeline-row-meta">@if (row.DurationDays is { } days) { <strong>@days @(days == 1 ? "dia" : "dias")</strong><span> · </span> }@row.Tasks.Count @(row.Tasks.Count == 1 ? "Task" : "Tasks") no filtro</span>
                                 </th>
@@ -150,7 +150,7 @@
     private string BarStyle(FeatureTimelineRow row) => Position(row.Feature.StartDate!.Value)
         + FormattableString.Invariant($"width:{row.DurationDays!.Value * 100d / TotalDays:0.####}%;");
     private static string DateLabel(DateOnly? date) => date?.ToString("dd/MM/yyyy", Pt) ?? "Não informada";
-    private static string BarLabel(FeatureTimelineRow row) => $"#{row.Feature.Id} · {row.Feature.Title}: {DateLabel(row.Feature.StartDate)} a {DateLabel(row.Feature.EndDate)}, {row.DurationDays} {(row.DurationDays == 1 ? "dia corrido" : "dias corridos")}. Abrir no Azure DevOps.";
+    private static string BarLabel(FeatureTimelineRow row) => $"#{row.Feature.Id} · {row.Feature.Title}: {DateLabel(row.Feature.StartDate)} a {DateLabel(row.Feature.EndDate)}, {row.DurationDays} {(row.DurationDays == 1 ? "dia corrido" : "dias corridos")}. Abrir no TimeOps.";
     private static string DateIssue(ParentWorkItem feature) => (feature.StartDate, feature.EndDate) switch
     {
         (null, null) => "Início e fim não informados",

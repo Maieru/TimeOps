@@ -1,106 +1,88 @@
 # TimeOps
 
-Painel para comparar a capacidade da sprint com as horas `Completed` das Tasks no Azure DevOps Services. O cálculo e as decisões de negócio estão em [docs/](docs/README.md).
+Planejamento de equipes e acompanhamento de implementações integrado ao **GitHub Projects**. O TimeOps administra equipes, funções, capacidades, ciclos, sprints, tarefas e apontamentos. O GitHub administra as issues, seus responsáveis e o status no Project.
 
-## Executar
+Uma tarefa pode gerar implementações em vários produtos. Cada produto possui seu repositório e Project; cada implementação recebe uma issue independente. As estimativas, sprints, horas e responsáveis de um produto não são compartilhados automaticamente com os demais.
 
-Requisitos para desenvolvimento: .NET 10 SDK. Para consultar dados, um PAT do Azure DevOps com os escopos `Work Items (Read)` (`vso.work`) e `Project and Team (Read)` (`vso.project`). O titular precisa ter acesso de leitura à organização e ao projeto.
+## Executar com Docker Compose
 
-```powershell
+Requisitos: Docker com Compose, um GitHub App instalado na organização e repositórios/Projects existentes.
+
+1. Copie `.env.example` para `.env` e preencha os valores.
+2. Gere a chave privada do GitHub App e salve no caminho informado em `GITHUB_PRIVATE_KEY_FILE`.
+3. Execute `docker compose up --build`.
+4. Abra `http://localhost:5191` e entre com a conta do administrador inicial.
+
+O Compose inicia PostgreSQL, aplica as migrações e persiste o banco e as chaves de sessão em volumes. O acesso publicado fica restrito ao localhost. O modo Development é destinado à execução local; para produção use HTTPS, `ASPNETCORE_ENVIRONMENT=Production` e um proxy configurado para encaminhar conexões WebSocket do Blazor. O proxy deve preservar o Host e enviar X-Forwarded-Proto. No Compose, informe seu IP em `TIMEOPS_TRUSTED_PROXY_IP`. Na execução direta, use `ReverseProxy__KnownProxies__0` (e índices seguintes, se necessário); somente proxies conhecidos têm os cabeçalhos aceitos. A entrega prevê uma instância do servidor.
+
+Faça backup do banco antes de atualizar uma instalação existente. A migração também pode ser executada separadamente com `dotnet TimeOps.Web.dll --migrate`; nesse caso, mantenha `Database__MigrateOnStartup=false` no servidor normal. `/health` verifica o processo e `/ready` verifica acesso ao banco.
+
+## Configurar o GitHub App
+
+Registre um GitHub App para a organização e configure:
+
+- **Callback URL:** `http://localhost:5191/signin-github` no desenvolvimento, ou `https://seu-endereco/signin-github` na instalação publicada.
+- **Webhook URL:** `https://seu-endereco/webhooks/github`. Defina um segredo com pelo menos 20 caracteres. A instalação local funciona também por sincronização periódica, sem receber webhooks externos.
+- **Repository permissions:** Issues — Read and write; Metadata — Read.
+- **Organization permissions:** Projects — Read and write.
+- **Eventos:** Issues e Projects v2 item, quando disponíveis na configuração da organização.
+
+Instale o App na organização e conceda acesso aos repositórios dos produtos. Preencha organização, App ID, Installation ID, Client ID, Client Secret, caminho da chave e segredo do webhook. `GITHUB_BOOTSTRAP_ADMIN_ID` é o ID numérico da conta GitHub do administrador inicial, disponível na resposta `GET https://api.github.com/users/SEU_LOGIN`. Ele só é utilizado quando o banco ainda não possui usuários; não reativa contas posteriormente revogadas.
+
+O login identifica a pessoa; os tokens da instalação são usados pelo servidor para criar e consultar issues e Projects. Credenciais não são enviadas ao navegador nem armazenadas em localStorage. O administrador autoriza as outras contas em **Acessos** e as vincula às equipes em **Planejamento**.
+
+## Usar
+
+1. Crie a equipe, configure calendário, integrantes e funções. Administradores controlam acessos globais; gestores administram suas equipes; integrantes registram suas horas e criam tarefas.
+2. Defina a capacidade padrão por pessoa e função, em horas por dia. Crie um ciclo com a quantidade desejada de sprints e revise as datas. Cada sprint recebe uma cópia das capacidades padrão; ajustes em sprints existentes são explícitos.
+3. Cadastre folgas individuais e da equipe. Cadastre os produtos com `organização/repositório` e número do Project. Consulte o GitHub e associe cada opção do campo **Status** a uma categoria do painel. É possível atualizar essa correspondência depois.
+4. Em **Tarefas e implementações**, crie uma tarefa e selecione os produtos. Informe estimativa, restante e sprint de cada implementação, ou deixe-a no backlog.
+5. Acompanhe a publicação de cada issue e atualize os dados após a sincronização. Responsável, título específico da issue e status são consultados do GitHub. Título e descrição da tarefa central são copiados na criação; edições posteriores não sobrescrevem as issues dos outros produtos.
+6. Em **Apontar horas**, registre pessoa, data, implementação, sprint e horas realizadas. Correções e anulações preservam auditoria. Replanejar não transfere apontamentos antigos.
+7. Consulte painel, visão pessoal, agrupamento por tarefa, timeline, histórico e burndown. Em **Exportar Excel**, selecione período e autor, confira a prévia e baixe o arquivo.
+
+As funções de trabalho, como desenvolvimento e QA, são configuráveis e diferentes das permissões de administrador, gestor e integrante. A soma das capacidades de uma pessoa não pode ultrapassar 24 horas/dia. O total de apontamentos de uma pessoa também não pode ultrapassar 24 horas na mesma data.
+
+## Métricas e histórico
+
+- Realizado soma os apontamentos ativos da pessoa na sprint informada. Não muda quando a issue troca de responsável.
+- Estimativa e restante são valores independentes mantidos no TimeOps. Registrar horas ou concluir a issue não altera automaticamente o restante.
+- Capacidade esperada usa calendário, folgas e capacidade da sprint até a referência; o padrão inicial da referência é ontem, no fuso da equipe.
+- O filtro de produto seleciona esforço; a capacidade da equipe não é multiplicada nem dividida entre produtos.
+- Múltiplos responsáveis, ausência de responsável e pessoas sem vínculo na equipe mantêm o restante em um grupo sem responsável único, sem rateio implícito.
+- O burndown usa os eventos locais de restante e replanejamento, incluindo entradas e saídas de sprint. Histórico com restante ausente não é apresentado como curva completa. O dia atual é parcial, e datas futuras não têm valores reais.
+- A timeline agrupa implementações por tarefa central e usa o intervalo das sprints planejadas. Tarefas sem datas aparecem com aviso.
+
+A exportação mantém as sete colunas **x**, **Atividade**, **OP/PMC/PGP**, **Nome da OP/PMC/PGP**, **Data**, **Horas** e **Comentários**. Cada linha representa um apontamento ativo, usando a data trabalhada e a pessoa que trabalhou. A tarefa central ocupa a coluna de agrupamento; a quarta e a sétima ficam vazias. Correções são refletidas no arquivo atual, e a auditoria permanece no banco. Nomes e títulos são texto literal no Excel.
+
+## Publicação e recuperação
+
+A criação local e sua fila de publicação são uma transação. O servidor salva o vínculo da issue antes de adicioná-la ao Project. Uma falha num produto não desfaz os demais. Falhas são retomadas com espera crescente, até oito tentativas, e ficam disponíveis para sincronização manual.
+
+Um timeout na criação pode significar que o GitHub criou a issue sem devolver a resposta. Nesse caso, o servidor procura o comentário de correlação `timeops-implementation` nas issues do repositório. Se não puder confirmar o resultado, não cria outra automaticamente. Um gestor pode conferir o repositório e usar **Autorizar nova criação**; uma nova consulta verifica se a issue já existe antes de liberar a tentativa.
+
+Webhooks são autenticados por HMAC-SHA256 e deduplicados pelo ID da entrega. O processamento consulta o estado atual do GitHub. A reconciliação ocorre a cada cinco minutos, e o worker verifica sua fila a cada 15 segundos. A interface apresenta última sincronização, publicações pendentes e falhas de acesso. Remover uma issue do Project não apaga dados locais nem causa recriação automática.
+
+## Desenvolvimento e validação
+
+Requisitos: SDK .NET 10, Node e PostgreSQL 17 para executar o aplicativo. Configure `ConnectionStrings__TimeOps` e as opções `GitHub__...` como variáveis de ambiente ou User Secrets. Não coloque credenciais em `wwwroot`.
+
+```sh
+dotnet restore TimeOps.slnx
+dotnet run --project src/TimeOps.Web -- --migrate
 dotnet run --project src/TimeOps.Web
 ```
 
-Abra `http://localhost:5191`, informe organização e PAT e selecione projeto, equipe e sprint. O TimeOps usa **Blazor WebAssembly standalone**: interface, cálculos, cache e consultas executam no navegador. O servidor local serve apenas arquivos estáticos.
-
-## PAT no cliente
-
-**Manter conexão neste navegador** vem marcado, preservando a opção de lembrar conexão. Organização e PAT são salvos em `localStorage` do perfil do navegador, por origem e caminho base da aplicação. Recarregar a página recupera a conexão. Desmarcar a opção remove a credencial anteriormente salva e usa o PAT apenas na memória desta aba, até recarregar ou fechar.
-
-**Esquecer e trocar conexão** remove a credencial salva e descarta a conexão da aba atual. Outras abas já abertas podem continuar com o PAT em memória até recarregar ou fechar. Pessoas que usam o mesmo perfil do navegador e endereço do aplicativo compartilham esse armazenamento; outros dispositivos ou perfis não recebem o PAT.
-
-O PAT sai do navegador somente no cabeçalho de autenticação das consultas HTTPS a `dev.azure.com`, nunca para o host estático do TimeOps. Não coloque PAT em arquivos de configuração, Git, URLs ou segredos do workflow. Tudo que estiver em `wwwroot` será público.
-
-O armazenamento do navegador **não é um cofre criptografado**: scripts da mesma origem e quem tem acesso ao perfil podem lê-lo. Use a opção de lembrar somente em um perfil confiável. A separação da chave por caminho evita colisões, mas não isola scripts de outros sites na mesma origem. Se o navegador bloquear o armazenamento, o aplicativo informa o erro sem expor o token; permita o armazenamento para conectar. A credencial antiga no Gerenciador de Credenciais do Windows não é importada nem apagada pela versão WebAssembly; pode ser removida manualmente em `TimeOps.AzureDevOps.Default`.
-
-## Funcionalidades e integração
-
-A consulta de histórias e features expande as relações de hierarquia para resolver o vínculo de pai quando `System.Parent` não aparece na resposta dos campos. Apenas `System.LinkTypes.Hierarchy-Reverse` identifica o pai; relações de filho e itens relacionados não alteram o agrupamento. O parâmetro `$expand: Relations` segue a [API de leitura em lote do Azure DevOps](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1). Um vínculo de pai inválido gera aviso de hierarquia indisponível, em vez de classificar silenciosamente a história como sem feature.
-
-A visão **Timeline de features**, disponível no menu, mostra um Gantt das features com Tasks na sprint e área da equipe selecionadas. Escolha um integrante para ver somente as features em que ele tem ao menos uma Task atualmente atribuída, ou **Toda a equipe** para comparar todos os períodos. O vínculo funciona por história ou diretamente entre Task e Feature; o responsável da própria Feature não determina a participação. Os períodos completos permanecem visíveis mesmo quando começam antes ou terminam depois da sprint. Atualizar os dados preserva o filtro de integrante enquanto a pessoa existir no contexto.
-
-O início vem de `Microsoft.VSTS.Scheduling.StartDate` e o fim previsto de `Microsoft.VSTS.Scheduling.TargetDate`, com `Microsoft.VSTS.Scheduling.FinishDate` como alternativa quando Target Date não tem uma data válida. Start Date e Target Date são os [campos padrão de planejamento do Azure Boards](https://learn.microsoft.com/en-us/azure/devops/boards/queries/query-by-date-or-current-iteration?view=azure-devops). Campos personalizados de datas não são mapeados automaticamente. A duração conta dias corridos, incluindo os dois extremos: início e fim no mesmo dia representam um dia. Datas ausentes ou fim anterior ao início mantêm a feature visível com aviso e sem barra; Tasks sem feature têm aviso próprio. A linha tracejada indica hoje quando está dentro do período mostrado. Títulos e barras abrem o item no DevOps, e a tabela tem rolagem interna e identificação fixa em telas pequenas.
-
-As visões de equipe, pessoa, **Features e histórias** e histórico mantêm os mesmos cálculos e regras. A visão de features soma o `Completed Work` das Tasks da sprint por história e feature, com cada nível expansível. Tasks sem vínculo aparecem em grupos próprios. O histórico mostra diferenças entre revisões de `Completed Work`, `Original Estimate` e `Remaining Work` nas Tasks do escopo atual, não apontamentos individuais. Completed é o valor **atual** do work item, mesmo ao selecionar uma referência anterior.
-
-A visão **Burndown da iteração**, disponível no menu, compara o `Remaining Work` diário com uma linha ideal que parte do restante na abertura da sprint e reduz até zero nos dias úteis, descontando as folgas da equipe. O gráfico SVG tem uma tabela expansível com os mesmos valores; ambos permitem rolagem interna em telas pequenas. O ponto “Início” representa a abertura e os demais representam o fim de cada dia. O dia da coleta é parcial; datas futuras não recebem valor real. Alterar a referência de capacidade não muda a curva, que permanece ancorada à coleta.
-
-A área do gráfico mostra um popup com os valores da data mais próxima ao mover o mouse horizontalmente ou tocar, sem precisar mirar na linha ou nas bolinhas. O popup acompanha o cursor a cada quadro do navegador, sem reconstruir o gráfico, e uma guia vertical identifica a data selecionada. Datas futuras continuam sem valor real. O popup destaca a data, o restante real, a linha ideal e a diferença, com cores correspondentes às séries e indicação de início ou coleta parcial. Tab navega pelos pontos e Escape fecha o popup. Seu tamanho em pixels independe da largura do gráfico; em telas pequenas, aparece abaixo da curva para manter todos os valores visíveis.
-
-O carregamento consulta as seis configurações independentes em paralelo. O histórico mantém até oito leituras de Tasks simultâneas, sem aguardar um grupo inteiro terminar. As revisões de horas ficam em cache na memória da aba por até cinco minutos: a revisão atual de cada Task é conferida antes de reutilizar suas atualizações, inclusive ao mudar o período. O burndown aproveita o escopo e as revisões da coleta do painel, pula Tasks sem mudanças no período e guarda seu histórico calculado para reabrir a mesma coleta sem novas consultas. Uma coleta atualizada ou nova conexão invalida esse resultado; páginas incompletas não entram no cache.
-
-O burndown reconstrói revisões somente das Tasks que estão atualmente na sprint e na área da equipe; não recompõe entradas e saídas desse escopo. Nas métricas atuais, campos vazios contam como zero com aviso. No burndown, `Remaining Work` vazio nas Tasks também conta como zero e gera um aviso, sem impedir a exibição da curva; campos vazios em revisões anteriores contam como zero. O campo indisponível no processo, datas ou calendário inválidos, histórico incompleto e dados inconsistentes impedem apresentar uma curva como completa.
-
-As chamadas ao DevOps agora estão sujeitas ao **CORS do navegador**. Falhas de rede orientam verificar esse bloqueio. Antes de disponibilizar para a equipe, valide os endpoints GET e POST, paginação e histórico com uma organização e PAT reais, a partir do endereço final do site. O host estático não consegue alterar a política CORS do Azure DevOps; se algum endpoint for bloqueado, será necessário rever a integração. Não desative a segurança do navegador.
-
-## Exportar horas para Excel
-
-Abra a aba **Exportar Excel** no menu da sprint, selecione **Data inicial** e **Data final** e use **Carregar alterações**. As datas começam no período da sprint; em sprints em andamento, o fim é limitado a hoje. Depois escolha **Todos os autores** ou uma **Pessoa**, confira a **Prévia da planilha** e o total de horas e clique em **Baixar Excel**. A prévia mostra até 50 linhas; o arquivo inclui todos os registros selecionados. Os autores vêm do histórico, inclusive quando não são responsáveis atuais pelas Tasks. Alterar datas exige carregar novamente, e trocar projeto, equipe, sprint ou conexão limpa a exportação. A aba utiliza os filtros de contexto do painel, sem o filtro de referência de capacidade.
-
-Cada linha representa um aumento de `Completed Work`: as horas são o valor novo menos o anterior, com vazio considerado zero. Reduções, mudanças sem diferença e alterações somente de estimativa ou restante não entram. A primeira coluna identifica quem fez a alteração, não o responsável atual. A soma exportada representa somente os aumentos selecionados, e pode diferir do Completed atual por causa de correções ou registros fora do período.
-
-O arquivo `.xlsx` contém uma aba **Tarefas**, com os cabeçalhos **x**, **Atividade**, **OP/PMC/PGP**, **Nome da OP/PMC/PGP**, **Data**, **Horas** e **Comentários**. A terceira coluna traz a Feature, por vínculo direto ou história; a quarta e a sétima ficam vazias. Datas são valores de Excel exibidos como `dd/MM/yyyy`, e horas são números decimais. O cabeçalho é cinza e em negrito, com fonte Arial 10. Nomes e títulos são texto literal.
-
-A exportação faz uma nova coleta, consulta apenas Tasks atualmente na sprint e na área da equipe e usa os nomes atuais das Tasks e Features. Considera dias inteiros no fuso configurado (`America/Sao_Paulo` por padrão), até o instante da coleta. Não reconstrói Tasks que saíram do escopo nem vínculos históricos. Falhas de hierarquia ou histórico impedem um arquivo parcial; sem resultados, o download fica desabilitado. Os limites de leitura do histórico continuam valendo: até 1.000 Tasks alteradas e paginação completa. Todo o arquivo é gerado e baixado no navegador, sem servidor de exportação.
-
-## Publicação estática
-
-```powershell
-dotnet publish src/TimeOps.Web/TimeOps.Web.csproj -c Release -o publish
-```
-
-Publique somente `publish/wwwroot`. Não é necessário executar .NET no host.
-
-Para GitHub Pages, selecione **Settings → Pages → Source: GitHub Actions** e execute **Actions → Deploy TimeOps to Pages → Run workflow**. O workflow testa, publica o projeto Web, ajusta o `base href` para o endereço configurado no Pages e cria `404.html` e `.nojekyll`. Após o push destas alterações na `main`, a publicação é automática. Pull requests para `main` executam testes e build, sem deploy. A execução manual publica apenas quando selecionada a `main`. O deploy depende do build e usa o ambiente `github-pages`; as permissões de publicação ficam restritas ao job de deploy. Nenhum PAT do Azure DevOps é necessário na action.
-
-Para Azure Static Web Apps, publique a mesma pasta com `base href="/"`. O arquivo `staticwebapp.config.json` incluído configura o retorno a `index.html` para rotas da aplicação. Em outros hosts, configure o mesmo fallback; para subdiretórios, ajuste o `base href` com barra final.
-
-Referências: [Blazor WebAssembly no Pages](https://learn.microsoft.com/en-us/aspnet/core/blazor/host-and-deploy/webassembly/github-pages?view=aspnetcore-10.0) e [Azure Static Web Apps](https://learn.microsoft.com/en-us/aspnet/core/blazor/host-and-deploy/webassembly/azure-static-web-apps?view=aspnetcore-10.0).
-
-## Validar
-
-```powershell
-dotnet test tests/TimeOps.Tests/TimeOps.Tests.csproj
+```sh
+dotnet test tests/TimeOps.Tests
 node --test tests/interaction/*.test.mjs
-python -m unittest discover -s tests/publishing -v
+dotnet build tests/TimeOps.E2E
+node tests/TimeOps.E2E/bin/Debug/net10.0/.playwright/package/cli.js install chromium
+dotnet test tests/TimeOps.E2E
 ```
 
-Os testes cobrem cálculos, casos de uso, API simulada, histórico, serialização e armazenamento com credenciais sintéticas, restauração, exclusão e falhas do navegador. A validação contra uma organização real exige um PAT fornecido pelo usuário e uma sprint de teste.
+Para usar Chromium já instalado, defina `E2E_BROWSER_PATH` com seu executável. Os testes HTTP e de navegador usam o servidor real com banco SQLite relacional e GitHub simulado, sem credenciais reais. Screenshots de desktop e mobile ficam em `.impeccable/review/`. O CI também aplica as migrações em PostgreSQL. Para executar toda a suíte HTTP/E2E com PostgreSQL, defina `TIMEOPS_TEST_POSTGRES` com a conexão de um banco exclusivo de testes; cada aplicação cria um schema isolado nesse banco.
 
-### Testes E2E com Playwright
+A solução mantém Domain, Application, Infrastructure e Web. Domain contém regras puras; Application coordena planejamento, relatórios e sincronização; Infrastructure implementa EF Core e REST/GraphQL; Web contém Blazor, autenticação, webhook e composição. Falhas esperadas usam `Result`.
 
-```powershell
-dotnet publish src/TimeOps.Web/TimeOps.Web.csproj -c Release -o artifacts/e2e-site
-dotnet build tests/TimeOps.E2E/TimeOps.E2E.csproj -c Release
-pwsh tests/TimeOps.E2E/bin/Release/net10.0/playwright.ps1 install chromium
-dotnet test tests/TimeOps.E2E/TimeOps.E2E.csproj -c Release --no-build --no-restore
-```
-
-Requisitos: .NET 10 e PowerShell 7 (`pwsh`). No Linux, use `install --with-deps chromium` para instalar também as dependências do navegador, conforme a [documentação do Playwright](https://playwright.dev/dotnet/docs/ci).
-
-A classe `CenarioE2E` segue o ciclo de inicialização e descarte do exemplo: `WebApplicationFactory`, Kestrel em uma porta dinâmica de loopback, Chromium, contexto isolado em `pt-BR`, screenshot e trace por cenário. Como o TimeOps é WebAssembly, `TimeOps.E2E.Host` serve os arquivos publicados e o Playwright intercepta todas as chamadas a `dev.azure.com` com `AzureDevOpsMock`. Os testes exercitam o aplicativo e o gateway REST reais com credenciais e respostas sintéticas; não precisam de PAT real. As datas da fixture usam a última semana de segunda a sexta, mantendo a sprint encerrada em qualquer dia de execução.
-
-Os cenários cobrem conexão persistida e temporária, credencial corrompida, erros 401/403, seleção de contexto, totais e Tasks, hierarquia, filtro da timeline, histórico e cache, atualização com falha e recuperação, burndown com teclado, mouse e toque em tela pequena. Screenshots e traces ficam em `artifacts/e2e/<classe>/<id>/`, inclusive quando um cenário falha. Para abrir um trace:
-
-```powershell
-pwsh tests/TimeOps.E2E/bin/Release/net10.0/playwright.ps1 show-trace artifacts/e2e/<classe>/<id>/trace.zip
-```
-
-`E2E_WEB_ROOT` permite apontar para outro diretório `wwwroot` publicado. Por padrão, o navegador roda sem janela; use `$env:E2E_HEADLESS = "0"` para exibi-la e `$env:E2E_SLOWMO = "30"` para desacelerar as ações. `E2E_CHANNEL` permite escolher um navegador instalado, como `msedge`. No CI, o workflow define `E2E_HEADLESS=1` e `E2E_SLOWMO=0` para executar sem interface gráfica nem atraso entre ações. O workflow instala Chromium, executa os cenários antes da preparação do Pages e guarda screenshots, traces e resultados no artefato `playwright-e2e` por sete dias.
-
-## Estrutura
-
-- `TimeOps.Domain`: regras puras, modelos e Result pattern.
-- `TimeOps.Application`: casos de uso e contratos.
-- `TimeOps.Infrastructure`: REST do Azure DevOps, PAT, armazenamento do navegador, cache e falhas.
-- `TimeOps.Web`: interface Blazor WebAssembly e composição das dependências.
-- `TimeOps.E2E`: cenários Playwright com Azure DevOps simulado; `TimeOps.E2E.Host` serve o site durante os testes.
+Esta migração substitui o fluxo ativo do Azure DevOps sem importar dados anteriores. Os adaptadores e testes legados permanecem no repositório como referência e regressão; não são registrados no aplicativo com servidor. O host estático e os cenários antigos de navegador também permanecem como referência, fora da suíte E2E ativa. A publicação automática no GitHub Pages foi substituída por validação do servidor no CI.
