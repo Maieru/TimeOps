@@ -7,26 +7,26 @@
 @if (Workspace is not null)
 {
     <div class="field context-picker"><label for="planning-team">Equipe</label><select id="planning-team" value="@TeamId" @onchange="ChangePlanningTeam"><option value="0">Selecione</option>@foreach (var team in Workspace.Teams) { <option value="@team.Id">@team.Name</option> }</select></div>
+    @if (TeamId != 0)
+    {
+        <SectionTabs Id="planning" Label="Áreas do planejamento" Items="PlanningTabs" @bind-Value="tab" Context="area">
+        @if (area == "team")
+        {
     @if (Workspace.User.IsAdmin)
     {
         <details class="editor"><summary>Nova equipe</summary><form @onsubmit="CreateTeam" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="team-name">Nome da equipe</label><input id="team-name" @bind="teamName" required maxlength="100" /></div><button class="refresh" disabled="@Busy">Criar equipe</button></form></details>
     }
-    @if (TeamId != 0)
-    {
         @if (Manager)
         {
-            <section class="planning-section"><h2>Calendário da equipe</h2><form @onsubmit="SaveCalendar" @onsubmit:preventDefault class="form-grid">
-                <div class="field"><label for="calendar-name">Nome</label><input id="calendar-name" @bind="calendarName" required /></div>
-                <div class="field"><label for="calendar-zone">Fuso horário</label><input id="calendar-zone" @bind="timeZone" required placeholder="America/Sao_Paulo" /></div>
-                <fieldset class="wide"><legend>Dias de trabalho</legend>@for (var day = 0; day < 7; day++) { var index = day; <label class="check"><input type="checkbox" @bind="workingDays[index]" />@DayNames[index]</label> }</fieldset>
-                <button class="refresh" disabled="@Busy">Salvar calendário</button>
-            </form></section>
             <section class="planning-section"><h2>Integrantes e funções</h2><div class="split-forms">
                 <form @onsubmit="SaveMember" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="member-user">Pessoa cadastrada</label><select id="member-user" @bind="memberId" required><option value="">Selecione</option>@foreach(var user in Data.Users.Where(u => u.IsActive)) { <option value="@user.Id">@user.Name (@user.Login)</option> }</select></div><div class="field"><label for="member-access">Permissão na equipe</label><select id="member-access" @bind="memberAccess"><option value="@TeamAccess.Member">Integrante</option><option value="@TeamAccess.Manager">Gestor</option></select></div><button class="refresh" disabled="@Busy">Salvar integrante</button></form>
                 <form @onsubmit="CreateRole" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="role-name">Nova função</label><input id="role-name" @bind="roleName" required placeholder="Desenvolvimento, QA…" /></div><button class="refresh" disabled="@Busy">Criar função</button></form>
             </div></section>
         }
-        <div class="table-scroll compact-table"><table><thead><tr><th>Pessoa</th><th>Acesso</th></tr></thead><tbody>@foreach(var member in Data.Memberships.Where(m => m.TeamId == TeamId)) { <tr><th>@UserName(member.UserId)</th><td>@(member.Access == TeamAccess.Manager ? "Gestor" : "Integrante")</td></tr> }</tbody></table></div>
+        <div class="table-scroll compact-table member-table"><table><thead><tr><th>Pessoa</th><th>Acesso</th></tr></thead><tbody>@foreach(var member in Data.Memberships.Where(m => m.TeamId == TeamId)) { <tr><th>@UserName(member.UserId)</th><td>@(member.Access == TeamAccess.Manager ? "Gestor" : "Integrante")</td></tr> }</tbody></table></div>
+        }
+        else if (area == "capacity")
+        {
         <section class="planning-section"><h2>Capacidade por função</h2><p>O padrão é copiado ao criar uma sprint. Ajustes posteriores são feitos diretamente na sprint.</p>
         @if (Manager)
         {
@@ -39,13 +39,9 @@
         }
         <div class="table-scroll compact-table"><table><thead><tr><th>Pessoa</th><th>Função</th><th>Período</th><th>Horas/dia</th></tr></thead><tbody>@foreach(var c in Data.Capacities.Where(c => c.TeamId == TeamId).OrderBy(c => c.SprintId)) { <tr><th>@UserName(c.UserId)</th><td>@Data.Roles.Single(r => r.Id == c.RoleId).Name</td><td>@(c.SprintId is null ? "Padrão" : Data.Sprints.Single(s => s.Id == c.SprintId).Name)</td><td>@H(c.HoursPerDay)</td></tr> }</tbody></table></div>
         </section>
-        <section class="planning-section"><h2>Folgas e feriados</h2>
-        @if (Manager)
-        {
-            <form @onsubmit="SaveLeave" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="leave-person">Pessoa ou equipe</label><select id="leave-person" @bind="leavePerson"><option value="">Toda a equipe</option>@foreach(var m in Members) { <option value="@m.UserId">@UserName(m.UserId)</option> }</select></div><div class="field"><label for="leave-start">Início da folga</label><input id="leave-start" type="date" @bind="leaveStart" required /></div><div class="field"><label for="leave-end">Fim da folga</label><input id="leave-end" type="date" @bind="leaveEnd" required /></div><button class="refresh" disabled="@Busy">Cadastrar folga</button></form>
         }
-        <ul class="plain-list">@foreach(var l in Data.Leaves.Where(l => l.TeamId == TeamId)) { <li><span>@(l.UserId is null ? "Toda a equipe" : UserName(l.UserId)) · @l.Start.ToString("dd/MM/yyyy") a @l.End.ToString("dd/MM/yyyy")</span>@if(Manager){<button class="text-action" disabled="@Busy" @onclick='() => Run(() => Planning.RemoveLeaveAsync(l.Id), "Folga removida.")'>Remover</button>}</li> }</ul>
-        </section>
+        else if (area == "cycles")
+        {
         <section class="planning-section"><h2>Ciclos e sprints</h2>
         @if (Manager)
         {
@@ -61,6 +57,28 @@
         }
         @if (editingCycle != 0) { <form @onsubmit="SaveSprint" @onsubmit:preventDefault class="form-grid editor"><h3 class="wide">@(editingSprint == 0 ? "Acrescentar sprint" : "Editar sprint")</h3><div class="field"><label for="edit-sprint-name">Nome</label><input id="edit-sprint-name" @ref="sprintField" @bind="sprintName" required /></div><div class="field"><label for="edit-sprint-start">Início</label><input id="edit-sprint-start" type="date" @bind="sprintStart" required /></div><div class="field"><label for="edit-sprint-end">Fim</label><input id="edit-sprint-end" type="date" @bind="sprintEnd" required /></div><button class="refresh" disabled="@Busy">Salvar sprint</button><button type="button" class="text-action" @onclick="() => editingCycle = 0">Cancelar edição</button></form> }
         </section>
+        }
+        else if (area == "calendar")
+        {
+        @if (Manager)
+        {
+            <section class="planning-section"><h2>Calendário da equipe</h2><form @onsubmit="SaveCalendar" @onsubmit:preventDefault class="form-grid">
+                <div class="field"><label for="calendar-name">Nome</label><input id="calendar-name" @bind="calendarName" required /></div>
+                <div class="field"><label for="calendar-zone">Fuso horário</label><input id="calendar-zone" @bind="timeZone" required placeholder="America/Sao_Paulo" /></div>
+                <fieldset class="wide"><legend>Dias de trabalho</legend>@for (var day = 0; day < 7; day++) { var index = day; <label class="check"><input type="checkbox" @bind="workingDays[index]" />@DayNames[index]</label> }</fieldset>
+                <button class="refresh" disabled="@Busy">Salvar calendário</button>
+            </form></section>
+        }
+        <section class="planning-section"><h2>Folgas e feriados</h2>
+        @if (Manager)
+        {
+            <form @onsubmit="SaveLeave" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="leave-person">Pessoa ou equipe</label><select id="leave-person" @bind="leavePerson"><option value="">Toda a equipe</option>@foreach(var m in Members) { <option value="@m.UserId">@UserName(m.UserId)</option> }</select></div><div class="field"><label for="leave-start">Início da folga</label><input id="leave-start" type="date" @bind="leaveStart" required /></div><div class="field"><label for="leave-end">Fim da folga</label><input id="leave-end" type="date" @bind="leaveEnd" required /></div><button class="refresh" disabled="@Busy">Cadastrar folga</button></form>
+        }
+        <ul class="plain-list">@foreach(var l in Data.Leaves.Where(l => l.TeamId == TeamId)) { <li><span>@(l.UserId is null ? "Toda a equipe" : UserName(l.UserId)) · @l.Start.ToString("dd/MM/yyyy") a @l.End.ToString("dd/MM/yyyy")</span>@if(Manager){<button class="text-action" disabled="@Busy" @onclick='() => Run(() => Planning.RemoveLeaveAsync(l.Id), "Folga removida.")'>Remover</button>}</li> }</ul>
+        </section>
+        }
+        else if (area == "products")
+        {
         <section class="planning-section"><h2>Produtos e GitHub Projects</h2><p>Cada produto liga um repositório a um Project existente. A execução é atualizada no GitHub.</p>
         @if (Manager)
         {
@@ -70,10 +88,21 @@
         }
         <ul class="plain-list">@foreach(var p in Data.Products.Where(p => p.TeamId == TeamId)) { <li><span><strong>@p.Name</strong> · @p.Repository</span><a href="@p.ProjectUrl" target="_blank" rel="noopener noreferrer">Project #@p.ProjectNumber</a>@if(Manager){<button class="text-action" @onclick="()=>EditProduct(p)">Editar produto e status</button>}</li> }</ul>
         </section>
+        }
+        </SectionTabs>
     }
-    else { <div class="empty-state"><h2>Comece por uma equipe</h2><p>Um administrador cadastra a equipe e concede acesso aos seus integrantes.</p></div> }
+    else
+    {
+    @if (Workspace.User.IsAdmin)
+    {
+        <details class="editor"><summary>Nova equipe</summary><form @onsubmit="CreateTeam" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="team-name">Nome da equipe</label><input id="team-name" @bind="teamName" required maxlength="100" /></div><button class="refresh" disabled="@Busy">Criar equipe</button></form></details>
+    }
+        <div class="empty-state"><h2>Comece por uma equipe</h2><p>Um administrador cadastra a equipe e concede acesso aos seus integrantes.</p></div>
+    }
 }
 @code {
+    private string tab = "team";
+    private static readonly TabItem[] PlanningTabs = [new("team", "Equipe"), new("capacity", "Capacidade"), new("cycles", "Ciclos e sprints"), new("calendar", "Calendário"), new("products", "Produtos")];
     private string teamName = "", calendarName = "", timeZone = "America/Sao_Paulo", memberId = "", roleName = "", capacityPerson = "", leavePerson = "", cycleName = "", productName = "", repository = "", sprintName = "";
     private TeamAccess memberAccess;
     private int editProductId;

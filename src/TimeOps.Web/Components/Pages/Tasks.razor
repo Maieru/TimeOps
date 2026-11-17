@@ -2,36 +2,84 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inherits WorkspacePage
 <PageTitle>Tarefas · TimeOps</PageTitle>
-<header class="page-header"><div><h1>Tarefas e implementações</h1><p>Crie uma vez e planeje a execução em cada produto.</p></div><button class="secondary-action" @onclick="Reload" disabled="@Busy">Atualizar dados</button></header>
+<header class="page-header"><div><h1>Tarefas e implementações</h1><p>Crie uma vez e planeje a execução em cada produto.</p></div><div class="header-actions"><button class="secondary-action" @onclick="Reload" disabled="@Busy">Atualizar dados</button>@if (Workspace is not null && CanCreate && tab != "new") { <button class="primary-action" @onclick="NewTask">Nova tarefa</button> }</div></header>
 <Feedback Busy="Busy" Error="@Error" Message="@Message" />
 @if (Workspace is not null)
 {
     <div class="field context-picker"><label for="tasks-team">Equipe</label><select id="tasks-team" value="@TeamId" @onchange="ChangeTeam"><option value="0">Selecione</option>@foreach(var t in Workspace.Teams){<option value="@t.Id">@t.Name</option>}</select></div>
-    @if (TeamId != 0 && Data.Products.Any(p => p.TeamId == TeamId))
+    <SectionTabs Id="tasks" Label="Gerenciar tarefas" Items="TaskTabs" @bind-Value="tab" Context="area">
+    @if (area == "new")
     {
-        <details class="editor" open><summary>Nova tarefa</summary><form @onsubmit="CreateTask" @onsubmit:preventDefault class="form-grid">
-            <div class="field wide"><label for="task-title">Título da tarefa</label><input id="task-title" @bind="title" required maxlength="200" /></div><div class="field wide"><label for="task-description">Descrição</label><textarea id="task-description" @bind="description" rows="4" maxlength="20000"></textarea></div>
+        @if (CanCreate)
+        {
+        <section class="editor task-create"><h2>Nova tarefa</h2><form @onsubmit="CreateTask" @onsubmit:preventDefault class="form-grid">
+            <div class="field wide"><label for="task-title">Título da tarefa</label><input id="task-title" @ref="newTaskField" @bind="title" required maxlength="200" /></div><div class="field wide"><label for="task-description">Descrição</label><textarea id="task-description" @bind="description" rows="4" maxlength="20000"></textarea></div>
             <fieldset class="wide"><legend>Produtos e planejamento de cada implementação</legend>@foreach(var row in selections) { var product=Data.Products.Single(p=>p.Id==row.ProductId);<div class="implementation-choice"><label class="check"><input type="checkbox" @bind="row.Selected" />@product.Name <small>@product.Repository · Project #@product.ProjectNumber</small></label>@if(row.Selected){<div class="form-grid"><div class="field"><label for="@($"task-sprint-{row.ProductId}")">Sprint</label><select id="@($"task-sprint-{row.ProductId}")" @bind="row.SprintId"><option value="0">Backlog</option>@foreach(var s in Sprints){<option value="@s.Id">@s.Name</option>}</select></div><div class="field"><label for="@($"task-original-{row.ProductId}")">Estimativa (h)</label><input id="@($"task-original-{row.ProductId}")" type="number" min="0" step="any" @bind="row.Original" /></div><div class="field"><label for="@($"task-remaining-{row.ProductId}")">Restante (h)</label><input id="@($"task-remaining-{row.ProductId}")" type="number" min="0" step="any" @bind="row.Remaining" /></div></div>}</div>}</fieldset>
             <p class="muted wide">Cada produto recebe uma issue própria. Responsável e status serão atualizados no GitHub; horas, ciclo e sprint ficam no TimeOps.</p><button class="refresh" disabled="@Busy">Criar tarefa e publicar no GitHub</button>
-        </form></details>
+        </form></section>
+        }
+        else { <div class="empty-state"><h2>Cadastre os produtos primeiro</h2><p>Um gestor precisa vincular repositórios e Projects em Planejamento.</p><a href="@($"planejamento?team={TeamId}")">Abrir planejamento</a></div> }
     }
-    else { <div class="empty-state"><h2>Cadastre os produtos primeiro</h2><p>Um gestor precisa vincular repositórios e Projects em Planejamento.</p><a href="planejamento">Abrir planejamento</a></div> }
-    @foreach(var task in Data.Tasks.Where(t=>t.TeamId==TeamId).OrderByDescending(t=>t.CreatedAt))
+    else if (area == "detail" && SelectedTask is { } task)
     {
+    @if(editingTask!=0){<section class="editor"><h2>Editar tarefa central</h2><p>As issues existentes mantêm o conteúdo de cada produto.</p><form @onsubmit="SaveTask" @onsubmit:preventDefault class="form-grid"><div class="field wide"><label for="edit-title">Título</label><input id="edit-title" @ref="editTaskField" @bind="editTitle" required maxlength="200" /></div><div class="field wide"><label for="edit-description">Descrição</label><textarea id="edit-description" @bind="editDescription" rows="4"></textarea></div><button class="refresh" disabled="@Busy">Salvar tarefa</button><button class="text-action" type="button" @onclick="()=>editingTask=0">Cancelar edição</button></form></section>}
+    @if(editingImplementation is not null){<section class="editor"><h2>Planejar implementação #@editingImplementation.Id</h2><form @onsubmit="SaveImplementation" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="edit-implementation-sprint">Sprint</label><select id="edit-implementation-sprint" @ref="editImplementationField" @bind="editSprint"><option value="0">Backlog</option>@foreach(var s in Sprints){<option value="@s.Id">@s.Name</option>}</select></div><div class="field"><label for="edit-original">Estimativa original (h)</label><input id="edit-original" type="number" min="0" step="any" @bind="editOriginal" /></div><div class="field"><label for="edit-remaining">Trabalho restante (h)</label><input id="edit-remaining" type="number" min="0" step="any" @bind="editRemaining" /></div><button class="refresh" disabled="@Busy">Salvar planejamento</button><button class="text-action" type="button" @onclick="()=>editingImplementation=null">Cancelar edição</button></form></section>}
         <section class="planning-section task-group" @key="task.Id"><div class="section-header"><div><h2>#@task.Id · @task.Title</h2><p>@task.Description</p></div>@if(Manager || task.CreatedBy==Workspace.User.Id){<button class="text-action" @onclick="()=>EditTask(task)">Editar tarefa</button>}</div>
-        <div class="table-scroll compact-table"><table><thead><tr><th>Produto / issue</th><th>Sprint</th><th>Responsável</th><th>Status no Project</th><th>Estimativa</th><th>Realizado</th><th>Restante</th><th>Sincronização</th></tr></thead><tbody>
+        <div class="implementation-grid">
         @foreach(var i in Data.Implementations.Where(i=>i.TaskId==task.Id))
         {
             var p=Data.Products.Single(p=>p.Id==i.ProductId);var assignees=JsonSerializer.Deserialize<string[]>(i.AssigneeIdsJson)!;
-            <tr><th>@p.Name @if(i.IssueUrl is not null){<a href="@i.IssueUrl" target="_blank" rel="noopener noreferrer">#@i.IssueNumber</a>}<small>@p.Repository</small></th><td>@(i.SprintId is null?"Backlog":Data.Sprints.Single(s=>s.Id==i.SprintId).Name)</td><td>@(assignees.Length==0?"Sem responsável":string.Join(", ",assignees.Select(UserName)))</td><td>@i.StatusName @(i.Archived?"· Arquivado":"")</td><td>@H(i.Original)</td><td>@H(Data.WorkLogs.Where(w=>w.ImplementationId==i.Id&&!w.Voided).Sum(w=>w.Hours))</td><td>@H(i.Remaining)</td><td><span>@PublicationLabel(i.PublicationState)</span><small>@(i.SyncedAt is { } synced ? TeamLocalTime(synced).ToString("dd/MM HH:mm") : "Aguardando primeira coleta")</small></td></tr>
-            <tr><td colspan="8" class="implementation-actions">@if(i.SyncError is not null){<p class="sync-error" role="status">@i.SyncError</p>}<button class="text-action" disabled="@Busy" @onclick='()=>Run(()=>Planning.RequestSyncAsync(i.Id),"Sincronização solicitada. Atualize os dados em alguns segundos.")'>Sincronizar</button>@if(Manager||assignees.Contains(Workspace.User.Id)){<button class="text-action" @onclick="()=>EditImplementation(i)">Editar planejamento e esforço</button>}<a href="@($"horas?team={TeamId}")">Apontar horas</a>@if(Manager && i.PublicationState==PublicationState.Uncertain){<label class="check"><input type="checkbox" checked="@recreationChecks.Contains(i.Id)" @onchange="e=>ToggleRecreation(i.Id,e)" />Conferi o repositório e não existe issue desta implementação</label><button class="text-action" disabled="@(Busy||!recreationChecks.Contains(i.Id))" @onclick='()=>Run(()=>Planning.AuthorizeRecreationAsync(i.Id),"Nova criação autorizada após conferência.")'>Autorizar nova criação</button>}</td></tr>
+            <article class="implementation-card" @key="i.Id">
+                <header><div><h3>@p.Name @if(i.IssueUrl is not null){<a href="@i.IssueUrl" target="_blank" rel="noopener noreferrer">#@i.IssueNumber</a>}</h3><p>@p.Repository</p></div><span class="implementation-status">@i.StatusName @(i.Archived?"· Arquivado":"")</span></header>
+                <dl class="implementation-meta"><div><dt>Sprint</dt><dd>@(i.SprintId is null?"Backlog":Data.Sprints.Single(s=>s.Id==i.SprintId).Name)</dd></div><div><dt>Responsável</dt><dd>@(assignees.Length==0?"Sem responsável":string.Join(", ",assignees.Select(UserName)))</dd></div></dl>
+                <dl class="implementation-effort"><div><dt>Estimativa</dt><dd>@H(i.Original)</dd></div><div><dt>Realizado</dt><dd>@H(Data.WorkLogs.Where(w=>w.ImplementationId==i.Id&&!w.Voided).Sum(w=>w.Hours))</dd></div><div><dt>Restante</dt><dd>@H(i.Remaining)</dd></div></dl>
+                <p class="publication-state">@PublicationLabel(i.PublicationState)<span>@(i.SyncedAt is { } synced ? TeamLocalTime(synced).ToString("dd/MM HH:mm") : "Aguardando primeira coleta")</span></p>
+                @if(i.SyncError is not null){<p class="sync-error" role="status">@i.SyncError</p>}
+                <div class="implementation-actions"><button class="text-action" disabled="@Busy" @onclick='()=>Run(()=>Planning.RequestSyncAsync(i.Id),"Sincronização solicitada. Atualize os dados em alguns segundos.")'>Sincronizar</button>@if(Manager||assignees.Contains(Workspace.User.Id)){<button class="text-action" @onclick="()=>EditImplementation(i)">Editar planejamento e esforço</button>}<a href="@($"horas?team={TeamId}")">Apontar horas</a></div>
+                @if(Manager && i.PublicationState==PublicationState.Uncertain){<div class="recreation-check"><label class="check"><input type="checkbox" checked="@recreationChecks.Contains(i.Id)" @onchange="e=>ToggleRecreation(i.Id,e)" />Conferi o repositório e não existe issue desta implementação</label><button class="text-action" disabled="@(Busy||!recreationChecks.Contains(i.Id))" @onclick='()=>Run(()=>Planning.AuthorizeRecreationAsync(i.Id),"Nova criação autorizada após conferência.")'>Autorizar nova criação</button></div>}
+            </article>
         }
-        </tbody></table></div></section>
+        </div></section>
     }
-    @if(editingTask!=0){<section class="editor"><h2>Editar tarefa central</h2><p>As issues existentes mantêm o conteúdo de cada produto.</p><form @onsubmit="SaveTask" @onsubmit:preventDefault class="form-grid"><div class="field wide"><label for="edit-title">Título</label><input id="edit-title" @ref="editTaskField" @bind="editTitle" required maxlength="200" /></div><div class="field wide"><label for="edit-description">Descrição</label><textarea id="edit-description" @bind="editDescription" rows="4"></textarea></div><button class="refresh" disabled="@Busy">Salvar tarefa</button><button class="text-action" type="button" @onclick="()=>editingTask=0">Cancelar edição</button></form></section>}
-    @if(editingImplementation is not null){<section class="editor"><h2>Planejar implementação #@editingImplementation.Id</h2><form @onsubmit="SaveImplementation" @onsubmit:preventDefault class="form-grid"><div class="field"><label for="edit-implementation-sprint">Sprint</label><select id="edit-implementation-sprint" @ref="editImplementationField" @bind="editSprint"><option value="0">Backlog</option>@foreach(var s in Sprints){<option value="@s.Id">@s.Name</option>}</select></div><div class="field"><label for="edit-original">Estimativa original (h)</label><input id="edit-original" type="number" min="0" step="any" @bind="editOriginal" /></div><div class="field"><label for="edit-remaining">Trabalho restante (h)</label><input id="edit-remaining" type="number" min="0" step="any" @bind="editRemaining" /></div><button class="refresh" disabled="@Busy">Salvar planejamento</button><button class="text-action" type="button" @onclick="()=>editingImplementation=null">Cancelar edição</button></form></section>}
+    else
+    {
+        <div class="list-toolbar"><div class="field"><label for="task-search">Buscar tarefa</label><input id="task-search" type="search" placeholder="Título ou número" @bind="search" @bind:event="oninput" @bind:after="ResetPage" /></div><span>@FilteredTasks.Count() tarefas</span></div>
+        @if (!FilteredTasks.Any())
+        {
+            <div class="empty-state"><h2>@(string.IsNullOrWhiteSpace(search) ? "Nenhuma tarefa nesta equipe" : "Nenhuma tarefa encontrada")</h2><p>@(string.IsNullOrWhiteSpace(search) ? "Crie uma tarefa e selecione os produtos que vão implementá-la." : "Tente outro título ou número.")</p></div>
+        }
+        else
+        {
+            <ul class="task-index">
+            @foreach (var item in FilteredTasks.Skip(pageIndex * PageSize).Take(PageSize))
+            {
+                var implementations = Data.Implementations.Where(i => i.TaskId == item.Id).ToArray();
+                <li><button type="button" @onclick="() => OpenTask(item.Id)"><span class="task-number">#@item.Id</span><span class="task-index-text"><strong>@item.Title</strong><small>@string.Join(" · ", implementations.Select(i => Data.Products.Single(p => p.Id == i.ProductId).Name))</small></span><span class="task-index-count">@implementations.Length @(implementations.Length == 1 ? "produto" : "produtos") <span aria-hidden="true">→</span></span></button></li>
+            }
+            </ul>
+            @if (FilteredTasks.Count() > PageSize)
+            {
+                <div class="pagination"><button class="secondary-action" disabled="@(pageIndex == 0)" @onclick="() => pageIndex--">Anterior</button><span>Página @(pageIndex + 1) de @PageCount</span><button class="secondary-action" disabled="@(pageIndex + 1 >= PageCount)" @onclick="() => pageIndex++">Próxima</button></div>
+            }
+        }
+    }
+    </SectionTabs>
 }
 @code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
+    private string tab = "list", search = "";
+    private int selectedTaskId, pageIndex;
+    private const int PageSize = 10;
+    private ElementReference newTaskField;
+    private bool CanCreate => TeamId != 0 && Data.Products.Any(p => p.TeamId == TeamId);
+    private TabItem[] TaskTabs => selectedTaskId == 0 ? [new("list", "Tarefas"), new("new", "Nova tarefa")] : [new("list", "Tarefas"), new("new", "Nova tarefa"), new("detail", "Implementações")];
+    private PlanningTask? SelectedTask => Data.Tasks.SingleOrDefault(t => t.Id == selectedTaskId && t.TeamId == TeamId);
+    private IEnumerable<PlanningTask> FilteredTasks => Data.Tasks.Where(t => t.TeamId == TeamId && (string.IsNullOrWhiteSpace(search) || t.Title.Contains(search, StringComparison.OrdinalIgnoreCase) || t.Id.ToString().Contains(search.TrimStart('#')))).OrderByDescending(t => t.CreatedAt);
+    private int PageCount => (FilteredTasks.Count() + PageSize - 1) / PageSize;
+    private void ResetPage() => pageIndex = 0;
+    private void OpenTask(int id) { selectedTaskId = id; editingTask = 0; editingImplementation = null; tab = "detail"; }
+    private void NewTask() { tab = "new"; FocusAfterRender(() => newTaskField); }
+
     private readonly HashSet<int> recreationChecks=[];
     private void ToggleRecreation(int id,ChangeEventArgs e){if(e.Value is true)recreationChecks.Add(id);else recreationChecks.Remove(id);}
     private ElementReference editTaskField,editImplementationField;
@@ -42,10 +90,15 @@
     private Implementation? editingImplementation;
     private List<Selection> selections=[];
     private IEnumerable<PlanningSprint> Sprints=>Data.Sprints.Where(s=>s.TeamId==TeamId).OrderBy(s=>s.Start);
-    protected override Task OnContextLoadedAsync(){ResetProducts();editingTask=0;editingImplementation=null;return Task.CompletedTask;}
+    protected override Task OnContextLoadedAsync(){ResetProducts();editingTask=0;editingImplementation=null;selectedTaskId=0;pageIndex=0;search="";tab=RequestedTab=="new"?"new":"list";return Task.CompletedTask;}
     private void ResetProducts(){selections=Data.Products.Where(p=>p.TeamId==TeamId).Select(p=>new Selection{ProductId=p.Id}).ToList();requestId=Guid.NewGuid();}
     private Task ChangeTeam(ChangeEventArgs e)=>TeamChanged(e);
-    private async Task CreateTask(){await Run(()=>Planning.CreateTaskAsync(TeamId,requestId,title,description,selections.Where(r=>r.Selected).Select(r=>new ImplementationInput(r.ProductId,r.SprintId==0?null:r.SprintId,r.Original,r.Remaining)).ToArray()),"Tarefa criada. A publicação de cada implementação aparece abaixo.");if(Error is null){title="";description="";ResetProducts();}}
+    private async Task CreateTask()
+    {
+        var createdId = 0;
+        await Run(async () => { var result = await Planning.CreateTaskAsync(TeamId,requestId,title,description,selections.Where(r=>r.Selected).Select(r=>new ImplementationInput(r.ProductId,r.SprintId==0?null:r.SprintId,r.Original,r.Remaining)).ToArray()); if (result.IsSuccess) createdId = result.Value; return result; }, "Tarefa criada. Acompanhe a publicação de cada implementação.");
+        if (Error is null) { title="";description="";ResetProducts();OpenTask(createdId); }
+    }
     private void EditTask(PlanningTask t){editingTask=t.Id;editTitle=t.Title;editDescription=t.Description;FocusAfterRender(()=>editTaskField);}
     private Task SaveTask()=>Run(()=>Planning.UpdateTaskAsync(editingTask,editTitle,editDescription),"Tarefa atualizada.");
     private void EditImplementation(Implementation i){editingImplementation=i;editSprint=i.SprintId??0;editOriginal=i.Original;editRemaining=i.Remaining;FocusAfterRender(()=>editImplementationField);}

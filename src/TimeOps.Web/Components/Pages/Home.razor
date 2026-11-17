@@ -5,10 +5,13 @@
 @inject PlanningReports Reports
 @inject TimeProvider Clock
 <PageTitle>@ViewTitle · TimeOps</PageTitle>
-<header class="page-header"><div><h1>@ViewTitle</h1><p>Capacidade planejada, horas trabalhadas e execução por produto.</p></div><a class="primary-action" href="@($"tarefas?team={TeamId}")">Criar tarefa</a></header>
+<header class="page-header"><div><h1>@ViewTitle</h1><p>Capacidade planejada, horas trabalhadas e execução por produto.</p></div><a class="primary-action" href="@($"tarefas?team={TeamId}&tab=new")">Criar tarefa</a></header>
 <Feedback Busy="Busy" Error="@Error" Message="@Message" />
+<SectionTabs Id="dashboard" Label="Visões do painel" Items="ReportTabs" Value="@Navigation.Current.ToString()" ValueChanged="SelectReport" Context="report">
 @if(Workspace is not null)
 {
+<details class="dashboard-context" open="@(dashboard is null)">
+<summary><span><strong>@(Data.Teams.SingleOrDefault(t => t.Id == TeamId)?.Name ?? "Selecione uma equipe")</strong><small>@(dashboard?.Sprint.Name ?? "Selecione uma sprint")@(productId != 0 ? " · " + Data.Products.Single(p => p.Id == productId).Name : "")</small></span><span class="context-edit">Ajustar filtros</span></summary>
 <section class="filters" aria-label="Contexto do painel">
 <div class="field"><label for="dashboard-team">Equipe</label><select id="dashboard-team" value="@TeamId" @onchange="ChangeTeam"><option value="0">Selecione</option>@foreach(var t in Workspace.Teams){<option value="@t.Id">@t.Name</option>}</select></div>
 <div class="field"><label for="dashboard-cycle">Ciclo</label><select id="dashboard-cycle" @bind="cycleId" @bind:after="CycleChanged"><option value="0">Todos os ciclos</option>@foreach(var c in Data.Cycles.Where(c=>c.TeamId==TeamId)){<option value="@c.Id">@c.Name</option>}</select></div>
@@ -19,13 +22,14 @@
 {
 <div class="field context-picker"><label for="dashboard-product">Produto</label><select id="dashboard-product" @bind="productId" @bind:after="LoadDashboard"><option value="0">Todos os produtos</option>@foreach(var p in Data.Products.Where(p=>p.TeamId==TeamId)){<option value="@p.Id">@p.Name</option>}</select></div>
 }
+</details>
 @if(dashboard is null)
 {
 <div class="empty-state"><h2>Planeje a primeira sprint</h2><p>Selecione uma equipe e uma sprint. O planejamento reúne ciclos, integrantes, funções, capacidades e produtos.</p><a href="@($"planejamento?team={TeamId}")">Abrir planejamento</a></div>
 }
 else
 {
-<div class="context-line"><span>@Data.Teams.Single(t=>t.Id==TeamId).Name</span><span>@dashboard.Sprint.Name</span><span>@dashboard.Sprint.Start?.ToString("dd/MM/yyyy") a @dashboard.Sprint.End?.ToString("dd/MM/yyyy")</span></div>
+<p class="sprint-period">@dashboard.Sprint.Start?.ToString("dd/MM/yyyy") a @dashboard.Sprint.End?.ToString("dd/MM/yyyy") · Referência: @reference.ToString("dd/MM/yyyy")</p>
 @if(dashboard.Warnings.Count>0){<details class="notice warning"><summary>@dashboard.Warnings.Count avisos sobre os dados</summary><ul>@foreach(var warning in dashboard.Warnings){<li>@warning.Message</li>}</ul></details>}
 @if(Navigation.Current==DashboardView.Team)
 {
@@ -48,7 +52,10 @@ else if(Navigation.Current==DashboardView.History)
 }
 }
 }
+</SectionTabs>
 @code{
+private static readonly TabItem[] ReportTabs = [new("Team", "Equipe"), new("Person", "Por pessoa"), new("Features", "Por tarefa"), new("Timeline", "Timeline"), new("History", "Histórico"), new("Burndown", "Burndown"), new("Export", "Exportar Excel")];
+private void SelectReport(string value) => Navigation.Select(Enum.Parse<DashboardView>(value));
 private int cycleId,sprintId,productId,refreshKey,reportGeneration;private DateOnly reference=DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);private string personId="";private string? timelinePerson;private Dashboard? dashboard;
 private string Zone=>Data.Teams.SingleOrDefault(t=>t.Id==TeamId)?.TimeZoneId??"America/Sao_Paulo";
 private DateOnly Today=>DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Clock.GetUtcNow(),TimeZoneInfo.FindSystemTimeZoneById(Zone)).DateTime);

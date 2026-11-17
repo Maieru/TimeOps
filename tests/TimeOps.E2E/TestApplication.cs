@@ -73,6 +73,7 @@ public sealed class TestAuthentication(IOptionsMonitor<AuthenticationSchemeOptio
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var id = Request.Headers["X-Test-User"].ToString();
+        if (id.Length == 0) id = Request.Cookies["TimeOps.TestUser"] ?? "";
         if (id.Length == 0) return Task.FromResult(AuthenticateResult.NoResult());
         var identity = new ClaimsIdentity([new(ClaimTypes.NameIdentifier, id), new(ClaimTypes.Name, id == "1" ? "Ana de teste" : "Bruno de teste")], Scheme.Name);
         return Task.FromResult(AuthenticateResult.Success(new(new ClaimsPrincipal(identity), Scheme.Name)));

@@ -1,0 +1,39 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<div class="section-tabs" @ref="root">
+    <div class="tab-navigation">
+    <button class="tab-overflow tab-previous" type="button" aria-label="Mostrar abas anteriores" aria-controls="@(Id + "-tabs")" hidden disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
+    <div class="tab-strip" id="@(Id + "-tabs")" role="tablist" aria-label="@Label">
+        @foreach (var item in Items)
+        {
+            <button type="button" role="tab" id="@(Id + "-tab-" + item.Id)" aria-controls="@(Id + "-panel-" + item.Id)" aria-selected="@(Value == item.Id ? "true" : "false")" tabindex="@(Value == item.Id ? 0 : -1)" @onclick="() => ValueChanged.InvokeAsync(item.Id)">@item.Label</button>
+        }
+    </div>
+    <button class="tab-overflow tab-next" type="button" aria-label="Mostrar próximas abas" aria-controls="@(Id + "-tabs")" hidden disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6" /></svg></button>
+    </div>
+    @foreach (var item in Items)
+    {
+        <section class="tab-panel" role="tabpanel" id="@(Id + "-panel-" + item.Id)" aria-labelledby="@(Id + "-tab-" + item.Id)" hidden="@(Value != item.Id)" tabindex="0">
+            @if (Value == item.Id) { @ChildContent(item.Id) }
+        </section>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public TabItem[] Items { get; set; } = [];
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter, EditorRequired] public RenderFragment<string> ChildContent { get; set; } = default!;
+    private ElementReference root;
+    private IJSObjectReference? module;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { module = await JS.InvokeAsync<IJSObjectReference>("import", "./tabs.mjs"); await module.InvokeVoidAsync("attach", root); }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("detach", root); await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

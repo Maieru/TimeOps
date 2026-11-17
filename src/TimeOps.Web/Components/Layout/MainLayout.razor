@@ -4,34 +4,38 @@
 @inject NavigationManager Router
 <AuthorizeView Context="session"><Authorized>
 <div class="shell">
-<aside class="sidebar">
-    <a class="brand" href="@($"/?team={Navigation.SelectedTeamId}")"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
-    <nav class="sidebar-nav" aria-label="Navegação principal">
-        <NavLink class="sidebar-pill" Match="NavLinkMatch.All" aria-current="@(CurrentPath=="planejamento"?"page":null)" href="@($"/planejamento?team={Navigation.SelectedTeamId}")">Planejamento</NavLink>
-        <NavLink class="sidebar-pill" Match="NavLinkMatch.All" aria-current="@(CurrentPath=="tarefas"?"page":null)" href="@($"/tarefas?team={Navigation.SelectedTeamId}")">Tarefas e implementações</NavLink>
-        <NavLink class="sidebar-pill" Match="NavLinkMatch.All" aria-current="@(CurrentPath=="horas"?"page":null)" href="@($"/horas?team={Navigation.SelectedTeamId}")">Apontar horas</NavLink>
-        @foreach (var item in Views)
-        {
-            <button class="sidebar-pill @(Navigation.Current == item.View && Router.ToBaseRelativePath(Router.Uri).Split('?')[0] == "" ? "is-active" : "")" type="button" disabled="@(!interactive)" aria-pressed="@(Navigation.Current==item.View && CurrentPath=="" ? "true":"false")" @onclick="() => Select(item.View)">@item.Label</button>
-        }
-        <NavLink class="sidebar-pill" Match="NavLinkMatch.All" aria-current="@(CurrentPath=="acessos"?"page":null)" href="@($"/acessos?team={Navigation.SelectedTeamId}")">Acessos</NavLink>
-    </nav>
-    <div class="sidebar-context"><span>Contexto atual</span><strong>@(Navigation.TeamName ?? "Selecione uma equipe")</strong><small>@Navigation.SprintName</small></div>
-    <div class="sidebar-foot"><span>GitHub Projects</span><small>Planejamento e horas no TimeOps</small></div>
-    <AuthorizeView><Authorized><form method="post" action="sair" data-enhance="false"><AntiforgeryToken /><button class="sidebar-pill" type="submit">Sair · @context.User.Identity?.Name</button></form></Authorized></AuthorizeView>
+<aside class="sidebar @(menuOpen ? "menu-open" : "")" @onkeydown="MenuKeyDown">
+    <div class="sidebar-top">
+        <a class="brand" href="@($"/?team={Navigation.SelectedTeamId}")"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
+        <button class="menu-toggle" @ref="menuButton" type="button" disabled="@(!interactive)" aria-expanded="@(menuOpen ? "true" : "false")" aria-controls="workspace-navigation" @onclick="() => menuOpen = !menuOpen"><NavIcon Name="@(menuOpen ? "close" : "menu")" />Menu</button>
+    </div>
+    <div class="sidebar-body" id="workspace-navigation">
+        <nav class="sidebar-nav" aria-label="Navegação principal">
+            @foreach (var item in Links)
+            {
+                <a class="nav-item @(CurrentPath == item.Path ? "active" : "")" aria-current="@(CurrentPath == item.Path ? "page" : null)" href="@($"/{item.Path}?team={Navigation.SelectedTeamId}")"><NavIcon Name="@item.Icon" /><span>@item.Label</span></a>
+            }
+        </nav>
+        <div class="sidebar-context"><span>Equipe atual</span><strong>@(Navigation.TeamName ?? "Selecione uma equipe")</strong><small>@Navigation.SprintName</small></div>
+        <div class="sidebar-bottom">
+            <div class="sidebar-foot"><span>GitHub Projects</span><small>Planejamento e horas no TimeOps</small></div>
+            <form method="post" action="sair" data-enhance="false"><AntiforgeryToken /><button class="nav-item sign-out" type="submit"><NavIcon Name="logout" /><span>Sair · @session.User.Identity?.Name</span></button></form>
+        </div>
+    </div>
 </aside>
 <main class="main-content"><fieldset class="interaction-scope" disabled="@(!interactive)">@Body</fieldset></main>
 </div>
 </Authorized><NotAuthorized>@Body</NotAuthorized></AuthorizeView>
 <div id="blazor-error-ui" data-nosnippet>Não foi possível manter a conexão. <a href="@($"/?team={Navigation.SelectedTeamId}")">Recarregar</a></div>
 @code {
-    private bool interactive;
-    protected override void OnAfterRender(bool firstRender){if(firstRender){interactive=true;StateHasChanged();}}
-    private static readonly (DashboardView View, string Label)[] Views = [(DashboardView.Team,"Painel da equipe"),(DashboardView.Person,"Por pessoa"),(DashboardView.Features,"Por tarefa"),(DashboardView.Timeline,"Timeline"),(DashboardView.History,"Histórico"),(DashboardView.Burndown,"Burndown"),(DashboardView.Export,"Exportar Excel")];
+    private bool interactive, menuOpen;
+    private ElementReference menuButton;
+    private static readonly (string Path, string Label, string Icon)[] Links = [("", "Painel", "dashboard"), ("planejamento", "Planejamento", "planning"), ("tarefas", "Tarefas", "tasks"), ("horas", "Apontamentos", "hours"), ("acessos", "Acessos", "access")];
+    protected override void OnAfterRender(bool firstRender) { if (firstRender) { interactive = true; StateHasChanged(); } }
     private string CurrentPath => Router.ToBaseRelativePath(Router.Uri).Split('?', '#')[0].Trim('/');
     protected override void OnInitialized() { Navigation.Changed += Refresh; Router.LocationChanged += LocationChanged; }
-    private void LocationChanged(object? sender,LocationChangedEventArgs e)=>Refresh();
-    private void Select(DashboardView view) { Navigation.Select(view); if (Router.ToBaseRelativePath(Router.Uri).Split('?')[0] != "") Router.NavigateTo($"/?team={Navigation.SelectedTeamId}"); }
+    private void LocationChanged(object? sender, LocationChangedEventArgs e) { menuOpen = false; Refresh(); }
+    private async Task MenuKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape" && menuOpen) { menuOpen = false; await menuButton.FocusAsync(); } }
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
     public void Dispose() { Navigation.Changed -= Refresh; Router.LocationChanged -= LocationChanged; }
 }
