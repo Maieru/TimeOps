@@ -6,12 +6,20 @@ public enum DashboardView { Team, Person, Features, History, Burndown, Timeline,
 public sealed class DashboardNavigationState
 {
     public DashboardView Current { get; private set; } = DashboardView.Team;
+    public int? SelectedTeamId { get; private set; }
     public string? ProjectName { get; private set; }
     public string? TeamName { get; private set; }
     public string? SprintName { get; private set; }
 
     public event Action<DashboardView>? ViewChanged;
     public event Action? Changed;
+
+    public void SelectTeam(int teamId)
+    {
+        if (SelectedTeamId == teamId) return;
+        SelectedTeamId = teamId;
+        Changed?.Invoke();
+    }
 
     public void Select(DashboardView view)
     {

@@ -2,61 +2,40 @@
 @implements IDisposable
 @inject DashboardNavigationState Navigation
 @inject NavigationManager Router
-
+<AuthorizeView Context="session"><Authorized>
 <div class="shell">
-    <aside class="sidebar">
-        <a class="brand" href="./" aria-label="TimeOps, início"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
-        <nav class="sidebar-nav" aria-label="Visões da sprint">
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Team ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Team ? "true" : "false")" @onclick="() => SelectView(DashboardView.Team)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19v-1.2A4.8 4.8 0 0 1 7.3 13h1.4a4.8 4.8 0 0 1 4.8 4.8V19H2.5Zm11 0v-1.2c0-1.1-.3-2.2-.9-3.1.8-1.1 2.1-1.7 3.4-1.7h.7a4.8 4.8 0 0 1 4.8 4.8V19h-8Z"/></svg>
-                <span>Equipe</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Person ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Person ? "true" : "false")" @onclick="() => SelectView(DashboardView.Person)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3.5"/><path d="M4.5 20v-1.4a7.5 7.5 0 0 1 15 0V20h-15Z"/></svg>
-                <span>Pessoa</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Features ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Features ? "true" : "false")" @onclick="() => SelectView(DashboardView.Features)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h6v5H3zM12 5h9v5h-9zM7 10v4m0 0h8m0 0v3m-3 0h7v3h-7z"/></svg>
-                <span>Features e histórias</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Timeline ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Timeline ? "true" : "false")" @onclick="() => SelectView(DashboardView.Timeline)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h17M8 7h7M11 12h9M7 17h6"/></svg>
-                <span>Timeline de features</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.History ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.History ? "true" : "false")" @onclick="() => SelectView(DashboardView.History)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.4 2"/></svg>
-                <span>Histórico de tarefas</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Burndown ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Burndown ? "true" : "false")" @onclick="() => SelectView(DashboardView.Burndown)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16M7 7l4 4 4-1 5 7M7 6l13 12"/></svg>
-                <span>Burndown da iteração</span>
-            </button>
-            <button class="sidebar-pill @(Navigation.Current == DashboardView.Export ? "is-active" : "")" type="button" aria-pressed="@(Navigation.Current == DashboardView.Export ? "true" : "false")" @onclick="() => SelectView(DashboardView.Export)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5"/></svg>
-                <span>Exportar Excel</span>
-            </button>
+<aside class="sidebar @(menuOpen ? "menu-open" : "")" @onkeydown="MenuKeyDown">
+    <div class="sidebar-top">
+        <a class="brand" href="@($"/?team={Navigation.SelectedTeamId}")"><span class="brand-mark">T</span><span>time<span class="brand-light">ops</span></span></a>
+        <button class="menu-toggle" @ref="menuButton" type="button" disabled="@(!interactive)" aria-expanded="@(menuOpen ? "true" : "false")" aria-controls="workspace-navigation" @onclick="() => menuOpen = !menuOpen"><NavIcon Name="@(menuOpen ? "close" : "menu")" />Menu</button>
+    </div>
+    <div class="sidebar-body" id="workspace-navigation">
+        <nav class="sidebar-nav" aria-label="Navegação principal">
+            @foreach (var item in Links)
+            {
+                <a class="nav-item @(CurrentPath == item.Path ? "active" : "")" aria-current="@(CurrentPath == item.Path ? "page" : null)" href="@($"/{item.Path}?team={Navigation.SelectedTeamId}")"><NavIcon Name="@item.Icon" /><span>@item.Label</span></a>
+            }
         </nav>
-        <div class="sidebar-context" aria-label="Contexto selecionado">
-            <span>Contexto atual</span>
-            <strong>@(Navigation.SprintName ?? "Escolha uma sprint")</strong>
-            <small>@(Navigation.TeamName is null ? "Use os filtros do painel" : $"{Navigation.ProjectName} / {Navigation.TeamName}")</small>
+        <div class="sidebar-context"><span>Equipe atual</span><strong>@(Navigation.TeamName ?? "Selecione uma equipe")</strong><small>@Navigation.SprintName</small></div>
+        <div class="sidebar-bottom">
+            <div class="sidebar-foot"><span>GitHub Projects</span><small>Planejamento e horas no TimeOps</small></div>
+            <form method="post" action="sair" data-enhance="false"><AntiforgeryToken /><button class="nav-item sign-out" type="submit"><NavIcon Name="logout" /><span>Sair · @session.User.Identity?.Name</span></button></form>
         </div>
-        <div class="sidebar-foot"><span>Fonte de dados</span><strong>Azure DevOps</strong><small>Consulta somente de leitura</small></div>
-    </aside>
-    <main class="main-content">@Body</main>
+    </div>
+</aside>
+<main class="main-content"><fieldset class="interaction-scope" disabled="@(!interactive)">@Body</fieldset></main>
 </div>
-
-<div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="./">Recarregar</a></div>
-
+</Authorized><NotAuthorized>@Body</NotAuthorized></AuthorizeView>
+<div id="blazor-error-ui" data-nosnippet>Não foi possível manter a conexão. <a href="@($"/?team={Navigation.SelectedTeamId}")">Recarregar</a></div>
 @code {
-    protected override void OnInitialized() => Navigation.Changed += Refresh;
-
-    private void SelectView(DashboardView view)
-    {
-        Navigation.Select(view);
-        if (Router.ToBaseRelativePath(Router.Uri) != "") Router.NavigateTo("");
-    }
-
+    private bool interactive, menuOpen;
+    private ElementReference menuButton;
+    private static readonly (string Path, string Label, string Icon)[] Links = [("", "Painel", "dashboard"), ("planejamento", "Planejamento", "planning"), ("tarefas", "Tarefas", "tasks"), ("horas", "Apontamentos", "hours"), ("acessos", "Acessos", "access")];
+    protected override void OnAfterRender(bool firstRender) { if (firstRender) { interactive = true; StateHasChanged(); } }
+    private string CurrentPath => Router.ToBaseRelativePath(Router.Uri).Split('?', '#')[0].Trim('/');
+    protected override void OnInitialized() { Navigation.Changed += Refresh; Router.LocationChanged += LocationChanged; }
+    private void LocationChanged(object? sender, LocationChangedEventArgs e) { menuOpen = false; Refresh(); }
+    private async Task MenuKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape" && menuOpen) { menuOpen = false; await menuButton.FocusAsync(); } }
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
-    public void Dispose() => Navigation.Changed -= Refresh;
+    public void Dispose() { Navigation.Changed -= Refresh; Router.LocationChanged -= LocationChanged; }
 }

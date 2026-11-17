@@ -2,7 +2,7 @@
 @using System.Globalization
 @using TimeOps.Domain
 @using TimeOps.Application
-@inject DashboardService Service
+@inject PlanningReports Reports
 @inject IJSRuntime JS
 
 <section class="burndown-panel" aria-label="Burndown da iteração" aria-busy="@loading.ToString().ToLowerInvariant()">
@@ -17,14 +17,14 @@
     }
     else if (data is not null && data.TaskCount == 0)
     {
-        <div class="person-empty">Nenhuma Task foi encontrada nesta iteração para a equipe selecionada.</div>
+        <div class="person-empty">Nenhuma implementação foi encontrada nesta iteração para a equipe selecionada.</div>
     }
     else if (data is not null)
     {
         <div class="burndown-report">
         <div class="burndown-heading">
-            <div><h2>Trabalho restante</h2><p>Horas em Remaining Work, comparadas à redução ideal nos dias úteis da equipe.</p></div>
-            <span class="burndown-collected"><i aria-hidden="true"></i>Coleta: <time datetime="@data.CollectedAt.ToString("O")">@Service.LocalTime(data.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</time></span>
+            <div><h2>Trabalho restante</h2><p>Trabalho restante registrado no TimeOps, comparadas à redução ideal nos dias úteis da equipe.</p></div>
+            <span class="burndown-collected"><i aria-hidden="true"></i>Coleta: <time datetime="@data.CollectedAt.ToString("O")">@LocalTime(data.CollectedAt).ToString("dd/MM/yyyy 'às' HH:mm", Pt)</time></span>
         </div>
         <dl class="burndown-totals">
             <div><dt>@(LastActual is null ? "Restante planejado" : "Restante no início")</dt><dd>@Hours(data.InitialRemaining)</dd></div>
@@ -110,6 +110,8 @@
 </section>
 
 @code {
+    [Parameter] public string TimeZoneId { get; set; } = "America/Sao_Paulo";
+    private DateTimeOffset LocalTime(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId));
     [Parameter, EditorRequired] public string ProjectId { get; set; } = "";
     [Parameter, EditorRequired] public string TeamId { get; set; } = "";
     [Parameter, EditorRequired] public Dashboard Dashboard { get; set; } = default!;
@@ -125,7 +127,7 @@
     private Burndown? interactiveData;
     private readonly string tooltipId = $"burndown-tooltip-{Guid.NewGuid():N}";
     private BurndownPoint? LastActual => data?.Points.LastOrDefault(point => point.Remaining is not null);
-    private bool AfterEnd => data is not null && DateOnly.FromDateTime(Service.LocalTime(data.CollectedAt).DateTime) > data.Sprint.End;
+    private bool AfterEnd => data is not null && DateOnly.FromDateTime(LocalTime(data.CollectedAt).DateTime) > data.Sprint.End;
     private decimal AxisMax => Math.Max(4, Math.Ceiling((data?.Points.Max(point => Math.Max(point.Ideal, point.Remaining ?? 0)) ?? 0) / 4) * 4);
 
     protected override async Task OnParametersSetAsync()
@@ -160,7 +162,7 @@
         error = null;
         try
         {
-            var result = await Service.GetBurndownAsync(ProjectId, TeamId, Dashboard.Sprint, current.Token);
+            var result = await Reports.BurndownAsync(int.Parse(TeamId), int.Parse(Dashboard.Sprint.Id), current.Token);
             if (current.IsCancellationRequested) return;
             if (result.IsFailure) error = result.Error!.Message;
             else data = result.Value;
@@ -177,7 +179,7 @@
     private static string SignedHours(decimal? value) => value is null ? "—" : $"{(value > 0 ? "+" : "")}{value.Value.ToString("N2", Pt)} h";
     private static string Label(BurndownPoint point) => point.IsBaseline ? "Início" : point.Date.ToString("dd/MM");
     private bool IsPartial(BurndownPoint point) => !point.IsBaseline && data is not null
-        && point.Date == DateOnly.FromDateTime(Service.LocalTime(data.CollectedAt).DateTime);
+        && point.Date == DateOnly.FromDateTime(LocalTime(data.CollectedAt).DateTime);
     private string PointDate(BurndownPoint point) => point.IsBaseline ? $"Início · {point.Date:dd/MM/yyyy}"
         : $"{point.Date:dd/MM/yyyy}{(IsPartial(point) ? " · parcial" : "")}";
     private static string Number(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);

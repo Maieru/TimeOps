@@ -1,0 +1,4 @@
+@if (Busy) { <div class="notice loading" role="status">Salvando…</div> }
+@if (Error is not null) { <div class="notice error" role="alert">@Error</div> }
+@if (Message is not null) { <div class="notice loading" role="status">@Message</div> }
+@code { [Parameter] public bool Busy { get; set; } [Parameter] public string? Error { get; set; } [Parameter] public string? Message { get; set; } }

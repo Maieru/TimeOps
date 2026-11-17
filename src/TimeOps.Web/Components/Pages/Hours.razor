@@ -1,0 +1,43 @@
+@page "/horas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inherits WorkspacePage
+<PageTitle>Apontamentos · TimeOps</PageTitle>
+<header class="page-header"><div><h1>Apontar horas</h1><p>Registre o trabalho realizado em cada implementação.</p></div>@if (Workspace is not null && TeamId != 0 && tab == "list") { <button class="primary-action" @onclick="NewEntry">Novo apontamento</button> }</header>
+<Feedback Busy="Busy" Error="@Error" Message="@Message" />
+@if(Workspace is not null)
+{
+<div class="field context-picker"><label for="hours-team">Equipe</label><select id="hours-team" value="@TeamId" @onchange="ChangeTeam"><option value="0">Selecione</option>@foreach(var t in Workspace.Teams){<option value="@t.Id">@t.Name</option>}</select></div>
+@if(TeamId!=0)
+{
+<SectionTabs Id="hours" Label="Apontamentos de horas" Items="HourTabs" @bind-Value="tab" Context="area">
+@if (area == "entry")
+{
+<form @onsubmit="Save" @onsubmit:preventDefault class="form-grid editor"><h2 class="wide">@(editingId==0?"Novo apontamento":$"Corrigir apontamento #{editingId}")</h2>
+<div class="field wide"><label for="hours-implementation">Implementação</label><select id="hours-implementation" @bind="implementationId" disabled="@(editingId!=0)" required><option value="0">Selecione tarefa e produto</option>@foreach(var i in Implementations){<option value="@i.Id">@Data.Tasks.Single(t=>t.Id==i.TaskId).Title · @Data.Products.Single(p=>p.Id==i.ProductId).Name</option>}</select></div>
+<div class="field"><label for="hours-person">Pessoa que trabalhou</label><select id="hours-person" @bind="personId" disabled="@(!Manager||editingId!=0)" required><option value="">Selecione</option>@foreach(var m in Data.Memberships.Where(m=>m.TeamId==TeamId)){<option value="@m.UserId">@UserName(m.UserId)</option>}</select></div>
+<div class="field"><label for="hours-sprint">Sprint do apontamento</label><select id="hours-sprint" @bind="sprintId" disabled="@(editingId!=0)" required><option value="0">Selecione</option>@foreach(var s in Data.Sprints.Where(s=>s.TeamId==TeamId).OrderBy(s=>s.Start)){<option value="@s.Id">@s.Name (@s.Start.ToString("dd/MM")–@s.End.ToString("dd/MM"))</option>}</select></div>
+<div class="field"><label for="hours-date">Data trabalhada</label><input id="hours-date" type="date" @bind="date" required /></div><div class="field"><label for="hours-value">Horas realizadas</label><input id="hours-value" @ref="hoursField" type="number" min="0.0001" max="24" step="any" @bind="hours" required /></div><button class="refresh" disabled="@Busy">@(editingId==0?"Registrar horas":"Salvar correção")</button>@if(editingId!=0){<button type="button" class="text-action" @onclick="Reset">Cancelar edição</button>}
+<p class="muted wide">As horas pertencem à pessoa e à sprint informadas. Alterar o responsável no GitHub ou replanejar a implementação preserva estes registros.</p></form>
+}
+else
+{
+<section class="planning-section"><h2>Apontamentos da equipe</h2><div class="table-scroll compact-table"><table><thead><tr><th>Data / pessoa</th><th>Tarefa / produto</th><th>Sprint</th><th>Horas</th><th>Situação</th><th>Ações</th></tr></thead><tbody>@foreach(var w in Data.WorkLogs.Where(w=>Implementations.Any(i=>i.Id==w.ImplementationId)).OrderByDescending(w=>w.Date)){var i=Data.Implementations.Single(i=>i.Id==w.ImplementationId);<tr><th>@w.Date.ToString("dd/MM/yyyy")<small>@UserName(w.UserId)</small></th><td>@Data.Tasks.Single(t=>t.Id==i.TaskId).Title<small>@Data.Products.Single(p=>p.Id==i.ProductId).Name</small></td><td>@Data.Sprints.Single(s=>s.Id==w.SprintId).Name</td><td>@H(w.Hours)</td><td>@(w.Voided?"Anulado":"Registrado")</td><td>@if(Manager||w.UserId==Workspace.User.Id){<button class="text-action" @onclick="()=>Edit(w)">Corrigir</button>@if(!w.Voided){<button class="text-action" disabled="@Busy" @onclick="()=>Void(w)">Anular</button>}}</td></tr>}</tbody></table></div></section>
+}
+</SectionTabs>
+}
+}
+@code{
+private string tab="list";
+private static readonly TabItem[] HourTabs=[new("list","Apontamentos"),new("entry","Registrar horas")];
+private void NewEntry(){Reset();tab="entry";}
+private ElementReference hoursField;
+private bool editingVoided;
+private int editingId,version,implementationId,sprintId;private string personId="";private DateOnly date;private decimal hours;
+private IEnumerable<Implementation> Implementations=>Data.Implementations.Where(i=>Data.Tasks.Any(t=>t.Id==i.TaskId&&t.TeamId==TeamId));
+protected override Task OnContextLoadedAsync(){Reset();return Task.CompletedTask;}
+private Task ChangeTeam(ChangeEventArgs e)=>TeamChanged(e);
+private void Reset(){tab="list";editingVoided=false;editingId=0;version=0;implementationId=0;sprintId=0;personId=Workspace?.User.Id??"";hours=0;date=LocalToday;}
+private void Edit(WorkLog w){tab="entry";editingId=w.Id;version=w.Version;implementationId=w.ImplementationId;sprintId=w.SprintId;personId=w.UserId;date=w.Date;hours=w.Hours;editingVoided=w.Voided;FocusAfterRender(()=>hoursField);}
+private async Task Save(){await Run(()=>Planning.SaveWorkLogAsync(editingId,version,implementationId,sprintId,personId,date,hours,editingVoided),"Apontamento salvo.");if(Error is null)Reset();}
+private Task Void(WorkLog w)=>Run(()=>Planning.SaveWorkLogAsync(w.Id,w.Version,w.ImplementationId,w.SprintId,w.UserId,w.Date,w.Hours,true),"Apontamento anulado; a auditoria foi preservada.");
+}

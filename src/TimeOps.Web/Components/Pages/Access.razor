@@ -1,0 +1,25 @@
+@page "/acessos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inherits WorkspacePage
+<PageTitle>Acessos · TimeOps</PageTitle>
+<header class="page-header"><div><h1>Acessos</h1><p>Autorize contas do GitHub e defina administradores.</p></div>@if (Workspace?.User.IsAdmin == true && tab == "list") { <button class="primary-action" @onclick="NewAccess">Autorizar usuário</button> }</header>
+<Feedback Busy="Busy" Error="@Error" Message="@Message" />
+@if(Workspace?.User.IsAdmin==true)
+{
+<SectionTabs Id="access" Label="Gerenciar acessos" Items="AccessTabs" @bind-Value="tab" Context="area">
+@if (area == "entry")
+{
+<form @onsubmit="Save" @onsubmit:preventDefault class="form-grid editor"><div class="field"><label for="access-login">Login do GitHub</label><input id="access-login" @ref="loginField" @bind="login" required maxlength="39" /></div><label class="check"><input type="checkbox" @bind="admin" />Administrador</label><label class="check"><input type="checkbox" @bind="active" />Acesso ativo</label><button class="refresh" disabled="@Busy">Salvar acesso</button><p class="muted wide">Depois de autorizar a conta, vincule a pessoa à equipe em Planejamento. Funções de trabalho e permissões de acesso são configurações distintas.</p></form>
+}
+else
+{
+<div class="table-scroll compact-table"><table><thead><tr><th>Pessoa</th><th>GitHub</th><th>Perfil</th><th>Acesso</th><th>Ações</th></tr></thead><tbody>@foreach(var user in Data.Users){<tr><th>@user.Name</th><td>@user.Login</td><td>@(user.IsAdmin?"Administrador":"Por equipe")</td><td>@(user.IsActive?"Ativo":"Desativado")</td><td><button class="text-action" @onclick="()=>Edit(user)">Editar acesso</button></td></tr>}</tbody></table></div>
+}
+</SectionTabs>
+}
+else if(Workspace is not null){<div class="notice warning" role="status">O cadastro de acessos é administrado por um administrador do TimeOps.</div>}
+@code{
+private string tab="list";
+private static readonly TabItem[] AccessTabs=[new("list","Usuários"),new("entry","Autorizar ou editar")];
+private void NewAccess(){login="";admin=false;active=true;tab="entry";FocusAfterRender(()=>loginField);}
+private ElementReference loginField;private string login="";private bool admin,active=true;private async Task Save(){await Run(()=>Planning.SaveUserAsync(login,admin,active),"Acesso atualizado.");if(Error is null)tab="list";}private void Edit(AppUser u){tab="entry";login=u.Login;admin=u.IsAdmin;active=u.IsActive;FocusAfterRender(()=>loginField);}}

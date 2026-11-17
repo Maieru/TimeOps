@@ -20,7 +20,7 @@
             </div>
             <p class="gauge-note">@CoverageNote</p>
             <div class="gauge-totals">
-                <div><span>Completed <MetricInfo Title="Horas registradas" Description="@CompletedHelp" /></span><strong>@Hours(Person.Completed)</strong></div>
+                <div><span>Realizado <MetricInfo Title="Horas registradas" Description="@CompletedHelp" /></span><strong>@Hours(Person.Completed)</strong></div>
                 <div><span>Esperadas <MetricInfo Title="Horas esperadas" Description="@ExpectedHelp" /></span><strong>@Hours(Person.Expected)</strong></div>
                 <div><span>Diferença <MetricInfo Title="Diferença" Description="@DifferenceHelp" /></span><strong class="@VarianceClass(Person.Difference)">@SignedHours(Person.Difference)</strong></div>
             </div>
@@ -40,7 +40,7 @@
                 }
                 else
                 {
-                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade ou o campo Completed no Azure DevOps.</p>
+                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade ou o campo Completed no GitHub Projects.</p>
                 }
             </div>
             <div class="person-comparison">
@@ -53,7 +53,7 @@
                 }
                 else
                 {
-                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade futura ou o campo Remaining Work no Azure DevOps.</p>
+                    <p class="comparison-unavailable">Comparação indisponível: confira a capacidade futura ou o campo trabalho restante no GitHub Projects.</p>
                 }
             </div>
         </section>
@@ -99,7 +99,7 @@
         </details>
     </section>
 
-    <p class="method-note">Os valores de Completed, Remaining Work e Original Estimate refletem as Tasks atribuídas agora. A data escolhida altera a capacidade, mas não reconstrói apontamentos históricos. Estes indicadores não são uma avaliação automática de produtividade.</p>
+    <p class="method-note">As horas realizadas pertencem à pessoa que trabalhou. Estimativa e restante seguem o responsável atual no GitHub; a referência altera a capacidade esperada. Estes indicadores não são uma avaliação automática de produtividade.</p>
 </div>
 
 @code {
@@ -108,18 +108,18 @@
     [Parameter] public IReadOnlyList<DataWarning> GlobalWarnings { get; set; } = [];
 
     private static readonly CultureInfo Pt = CultureInfo.GetCultureInfo("pt-BR");
-    private const string CoverageHelp = "Completed Work dividido pelas horas esperadas até a data escolhida, em porcentagem. Não se aplica quando a expectativa é zero; fica indisponível se faltar capacidade ou o campo Completed.";
-    private const string CompletedHelp = "Soma do Completed Work atual das Tasks atribuídas a esta pessoa. Campos vazios entram como zero e geram aviso.";
+    private const string CoverageHelp = "horas realizadas dividido pelas horas esperadas até a data escolhida, em porcentagem. Não se aplica quando a expectativa é zero; fica indisponível se faltar capacidade ou o campo Completed.";
+    private const string CompletedHelp = "Soma dos apontamentos ativos desta pessoa na sprint, mesmo quando o responsável da issue mudou.";
     private const string ExpectedHelp = "Capacidade diária multiplicada pelos dias de trabalho decorridos na sprint, descontadas as folgas individuais e da equipe. Fica indisponível sem capacidade cadastrada.";
     private const string DifferenceHelp = "Horas registradas menos horas esperadas. Negativo significa menos horas registradas do que a capacidade acumulada; positivo significa mais.";
-    private const string RemainingHelp = "Soma do Remaining Work atual das Tasks atribuídas a esta pessoa. Não é a diferença entre capacidade e Completed.";
+    private const string RemainingHelp = "Soma do trabalho restante atual das Tasks atribuídas a esta pessoa. Não é a diferença entre capacidade e Completed.";
     private const string FutureHelp = "Capacidade dos dias de trabalho após a data escolhida até o fim da sprint, descontadas as folgas.";
-    private const string FutureBalanceHelp = "Capacidade futura menos Remaining Work. Um valor negativo indica que o trabalho restante excede a capacidade futura.";
-    private const string DailyHelp = "Soma da capacidade diária cadastrada nas atividades desta pessoa no Azure DevOps. Não presume oito horas quando faltar cadastro.";
+    private const string FutureBalanceHelp = "Capacidade futura menos trabalho restante. Um valor negativo indica que o trabalho restante excede a capacidade futura.";
+    private const string DailyHelp = "Soma da capacidade diária cadastrada nas funções desta pessoa no TimeOps. Não presume oito horas quando faltar cadastro.";
     private const string TotalHelp = "Capacidade diária multiplicada por todos os dias de trabalho da sprint, descontadas as folgas.";
-    private const string OriginalHelp = "Soma do Original Estimate atual das Tasks atribuídas a esta pessoa. É separada das horas registradas e restantes.";
+    private const string OriginalHelp = "Soma do estimativa original atual das Tasks atribuídas a esta pessoa. É separada das horas registradas e restantes.";
     private const string TasksHelp = "Tasks da sprint e do escopo da equipe atualmente atribuídas a esta pessoa. Cada Task é contada uma vez.";
-    private const string StatesHelp = "Distribuição por quantidade de Tasks conforme a categoria de estado atual no Azure DevOps. A proporção não representa horas.";
+    private const string StatesHelp = "Distribuição por quantidade de Tasks conforme a categoria de estado atual no GitHub Projects. A proporção não representa horas.";
 
     private int CompletedTaskCount => Person.Tasks.Count(task => string.Equals(task.StateCategory, "Completed", StringComparison.OrdinalIgnoreCase));
     private DataWarning[] RelevantWarnings => Person.Warnings.Concat(GlobalWarnings.Where(warning => warning.Code.StartsWith("field.", StringComparison.Ordinal))).Distinct().ToArray();

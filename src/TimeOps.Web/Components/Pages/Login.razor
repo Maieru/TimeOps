@@ -1,0 +1,13 @@
+@page "/login"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+<PageTitle>Entrar · TimeOps</PageTitle>
+<section class="login-surface">
+    <div class="login-brand">time<span>ops</span></div>
+    <h1>Planeje a equipe.<br />Acompanhe cada produto.</h1>
+    <p>Ciclos, capacidade e horas em um só lugar. Implementações conectadas às issues do GitHub Projects.</p>
+    @if (LoginState == "denied") { <div class="notice error" role="alert">Não foi possível entrar. Confira sua conta do GitHub e solicite acesso ao administrador do TimeOps.</div> }
+    @if (LoginState == "configuration") { <div class="notice warning" role="alert">O login ainda não foi configurado. O administrador precisa configurar o GitHub App no servidor.</div> }
+    <a class="primary-action" href="entrar" data-enhance-nav="false">Entrar com GitHub</a>
+    <small>Use a conta autorizada pelo administrador da sua equipe.</small>
+</section>
+@code { [SupplyParameterFromQuery(Name = "login")] public string? LoginState { get; set; } }

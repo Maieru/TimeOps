@@ -1,0 +1,12 @@
+.git
+**/bin
+**/obj
+artifacts
+tests
+.impeccable/review
+.env
+.env.*
+.secrets
+**/*.pem
+**/*.pfx
+**/appsettings.Development.json
